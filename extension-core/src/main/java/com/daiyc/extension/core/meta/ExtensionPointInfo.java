@@ -57,6 +57,8 @@ public class ExtensionPointInfo {
 
         private String path;
 
+        private boolean useDefault;
+
         public MethodInfo(Method method) {
             this.method = method;
 
@@ -73,6 +75,9 @@ public class ExtensionPointInfo {
                 }
                 paramIndex = i;
                 path = ann.value();
+                useDefault = ann.useDefault();
+
+                break;
             }
         }
 

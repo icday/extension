@@ -3,7 +3,7 @@ package com.daiyc.extension.core;
 import com.daiyc.extension.core.annotations.Extension;
 import com.daiyc.extension.core.meta.ExtensionPointInfo;
 import lombok.SneakyThrows;
-import org.apache.commons.beanutils.BeanUtils;
+import org.apache.commons.beanutils.PropertyUtils;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -63,7 +63,14 @@ public class DefaultExtensionLoader<T> implements ExtensionLoader<T> {
         if (path == null || path.isEmpty()) {
             return param.toString();
         }
-        return BeanUtils.getProperty(param, path);
+        Object property = PropertyUtils.getProperty(param, path);
+        if (property instanceof String) {
+            return (String) property;
+        } else if (property instanceof Enum) {
+            return ((Enum<?>) property).name();
+        } else {
+            return property.toString();
+        }
     }
 
     @SneakyThrows

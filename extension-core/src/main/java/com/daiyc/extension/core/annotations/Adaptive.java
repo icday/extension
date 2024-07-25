@@ -14,4 +14,9 @@ public @interface Adaptive {
      * 用于指定用于决策实现的参数名
      */
     String value() default "";
+
+    /**
+     * 当指定参数无法获取
+     */
+    boolean useDefault() default false;
 }
