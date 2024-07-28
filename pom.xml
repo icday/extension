@@ -12,11 +12,12 @@
 
     <groupId>com.daiyc.extension</groupId>
     <artifactId>extension-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <packaging>pom</packaging>
     <modules>
         <module>extension-core</module>
         <module>extension-processor</module>
+        <module>extension-spring-boot-starter</module>
     </modules>
 
     <properties>
@@ -289,6 +290,19 @@
                     </annotationProcessorPaths>
                 </configuration>
                 <version>3.7.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${maven.source.version}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

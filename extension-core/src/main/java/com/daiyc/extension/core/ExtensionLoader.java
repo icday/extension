@@ -5,7 +5,6 @@ package com.daiyc.extension.core;
  * @since  2024/7/16
  */
 public interface ExtensionLoader<T> {
-
     /**
      * 获取指定类型的自适应扩展
      *
