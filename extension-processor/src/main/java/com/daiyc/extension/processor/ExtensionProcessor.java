@@ -1,7 +1,9 @@
 package com.daiyc.extension.processor;
 
 import com.daiyc.extension.core.AdaptiveExtension;
+import com.daiyc.extension.core.ExtensionNameConverter;
 import com.daiyc.extension.core.ExtensionRegistry;
+import com.daiyc.extension.core.ObjectFactory;
 import com.daiyc.extension.core.annotations.Adaptive;
 import com.daiyc.extension.util.NameGenerateUtils;
 import com.daiyc.extension.util.PropertyRetrieveUtils;
@@ -20,6 +22,7 @@ import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -116,9 +119,14 @@ public class ExtensionProcessor extends AbstractProcessor {
 
         int adaptiveParamIndex = getAdaptiveParamIndex(method);
         VariableElement adaptiveParam = parameters.get(adaptiveParamIndex);
-        String path = adaptiveParam.getAnnotation(Adaptive.class).value();
+
+        Map<String, AnnotationValue> annotationValues = AnnotationUtils.getAnnotationValues(adaptiveParam, Adaptive.class);
+        TypeMirror converterType = (TypeMirror) annotationValues.get("converter").getValue();
+        String path = annotationValues.get("value").getValue().toString();
 
         methodBuilder.addStatement("String key = $T.retrieveKey($L, $S)", PropertyRetrieveUtils.class, adaptiveParam.getSimpleName(), path);
+        methodBuilder.addStatement("$T converter = $T.getInstance().get($T.class)", ExtensionNameConverter.class, ObjectFactory.class, converterType);
+        methodBuilder.addStatement("key = converter.convert(key)");
         methodBuilder.addStatement("$L extension = registry.get(key)", interfaze.getSimpleName());
         String args = parameters.stream()
                 .map(VariableElement::getSimpleName)

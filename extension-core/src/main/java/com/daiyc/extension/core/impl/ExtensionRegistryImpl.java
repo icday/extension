@@ -16,6 +16,7 @@ import java.util.function.Supplier;
  * @author daiyc
  * @since 2024/7/27
  */
+@SuppressWarnings("unchecked")
 @RequiredArgsConstructor
 public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
     protected final Class<T> type;

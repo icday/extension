@@ -16,9 +16,4 @@ public @interface Extension {
      * 扩展点处理匹配信息
      */
     String value();
-
-    /**
-     * 优先级
-     */
-    int priority() default 0;
 }
