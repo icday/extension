@@ -1,0 +1,298 @@
+package com.daiyc.extension.processor;
+
+import com.daiyc.extension.core.AdaptiveExtension;
+import com.daiyc.extension.core.ExtensionNameConverter;
+import com.daiyc.extension.core.ExtensionRegistry;
+import com.daiyc.extension.core.ObjectFactory;
+import com.daiyc.extension.core.annotations.Adaptive;
+import com.daiyc.extension.core.annotations.ExtensionPoint;
+import com.daiyc.extension.core.enums.DegradationStrategy;
+import com.daiyc.extension.core.exceptions.MismatchExtensionException;
+import com.daiyc.extension.util.NameGenerateUtils;
+import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.MethodSpec;
+import com.squareup.javapoet.ParameterizedTypeName;
+import com.squareup.javapoet.TypeSpec;
+import io.vavr.Tuple;
+import io.vavr.Tuple2;
+import io.vavr.collection.Stream;
+import org.apache.commons.lang3.StringUtils;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.*;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
+import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+import javax.tools.Diagnostic;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * @author daiyc
+ * @since 2024/7/31
+ */
+public class AdaptiveClassGenerator {
+    protected final ProcessingEnvironment processingEnv;
+
+    protected final TypeElement interfaze;
+
+    protected final Elements elementUtils;
+
+    protected final Types typeUtils;
+
+    protected final TypeElement objectTypeElement;
+
+    protected final Map<Tuple2<String, String>, MethodSpec> helpMethods = new HashMap<>();
+
+    protected TypeSpec cache = null;
+
+    public AdaptiveClassGenerator(ProcessingEnvironment processingEnv, TypeElement interfaze) {
+        this.processingEnv = processingEnv;
+        this.interfaze = interfaze;
+        this.elementUtils = processingEnv.getElementUtils();
+        this.typeUtils = processingEnv.getTypeUtils();
+
+        this.objectTypeElement = elementUtils.getTypeElement("java.lang.Object");
+    }
+
+    public TypeSpec generate() {
+        if (cache != null) {
+            return cache;
+        }
+
+        TypeSpec.Builder classBuilder = TypeSpec.classBuilder(NameGenerateUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addSuperinterface(interfaze.asType())
+                .addSuperinterface(ClassName.get(AdaptiveExtension.class));
+
+        ParameterizedTypeName registryType = ParameterizedTypeName.get(ClassName.get(ExtensionRegistry.class), ClassName.get(interfaze));
+        String defaultExtName = (String) AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class).get("value").getValue();
+
+        classBuilder
+                .addField(registryType, "registry", Modifier.PROTECTED, Modifier.FINAL)
+                .addField(String.class, "defaultExtName", Modifier.PROTECTED, Modifier.FINAL);
+
+        classBuilder.addMethod(
+                MethodSpec.constructorBuilder()
+                        .addModifiers(Modifier.PUBLIC)
+                        .addParameter(registryType, "registry")
+                        .addStatement("this.registry = registry")
+                        .addStatement("this.defaultExtName = $S", defaultExtName)
+                        .build()
+        );
+
+        Stream.ofAll(getAllInterfaceMethods())
+                .map(m -> this.generateMethodSpec(interfaze, m))
+                .forEach(classBuilder::addMethod);
+
+        helpMethods.values()
+                .forEach(classBuilder::addMethod);
+
+        return cache = classBuilder.build();
+    }
+
+    private MethodSpec generateMethodSpec(TypeElement interfaze, ExecutableElement method) {
+        if (getAdaptiveParamIndex(method) > -1) {
+            return generateAdaptiveMethodSpec(interfaze, method);
+        } else {
+            return generateUnsupportedMethodSpec(interfaze, method);
+        }
+    }
+
+    private MethodSpec generateAdaptiveMethodSpec(TypeElement interfaze, ExecutableElement method) {
+        MethodSpec.Builder methodBuilder = newMethodBuilder(interfaze, method);
+
+        List<? extends VariableElement> parameters = method.getParameters();
+
+        Set<String> scope = parameters.stream()
+                .map(VariableElement::getSimpleName)
+                .map(Object::toString)
+                .collect(Collectors.toSet());
+
+        int adaptiveParamIndex = getAdaptiveParamIndex(method);
+        VariableElement adaptiveParam = parameters.get(adaptiveParamIndex);
+
+        Map<String, AnnotationValue> annotationValues = AnnotationUtils.getAnnotationValues(adaptiveParam, Adaptive.class);
+        TypeMirror converterType = (TypeMirror) annotationValues.get("converter").getValue();
+        String path = annotationValues.get("value").getValue().toString();
+        String degradationStrategyName = annotationValues.get("degradationStrategy").getValue().toString();
+        DegradationStrategy degradationStrategy = DegradationStrategy.valueOf(degradationStrategyName);
+
+        // retrieve method
+        TypeMirror paramType = adaptiveParam.asType();
+
+        Tuple2<String, String> retrieveMethodKey = Tuple.of("retrieveKey", ClassName.get(paramType).toString());
+        MethodSpec retrieveMethod = helpMethods.computeIfAbsent(retrieveMethodKey, k -> generateRetrieveMethod(k._1, paramType, path));
+
+        // 需要定义的局部变量
+        String keyVarName = newVariableName(scope, "key");
+        String keyStrVarName = newVariableName(scope, "keyStr");
+        String extensionVarName = newVariableName(scope, "extension");
+        String converterVarName = newVariableName(scope, "converter");
+
+        // get key string
+        methodBuilder.addStatement("Object $L = $L($L)", keyVarName, retrieveMethod.name, adaptiveParam.getSimpleName());
+        // get converter
+        methodBuilder.addStatement("$T $L = $T.getInstance().get($T.class)", ExtensionNameConverter.class, converterVarName, ObjectFactory.class, converterType);
+        // do convert
+        methodBuilder.addStatement("String $L = $L.convert($L)", keyStrVarName, converterVarName, keyVarName);
+        if (degradationStrategy == DegradationStrategy.DEFAULT_IF_MISMATCH || degradationStrategy == DegradationStrategy.DEFAULT_IF_NULL) {
+            methodBuilder.beginControlFlow("if ($L == null)", keyStrVarName);
+            methodBuilder.addStatement("$L = this.defaultExtName", keyStrVarName);
+            methodBuilder.endControlFlow();
+        } else {
+            methodBuilder.beginControlFlow("if ($L == null)", keyStrVarName);
+            methodBuilder.addStatement("throw new $T($T.class)", MismatchExtensionException.class, interfaze);
+            methodBuilder.endControlFlow();
+        }
+
+        methodBuilder.addStatement("$L $L = this.registry.get($L)", interfaze.getSimpleName(), extensionVarName, keyStrVarName);
+
+        if (degradationStrategy == DegradationStrategy.DEFAULT_IF_MISMATCH) {
+            methodBuilder.beginControlFlow("if ($L == null && $L != this.defaultExtName)", extensionVarName, keyStrVarName);
+            methodBuilder.addStatement("$L = this.registry.get(this.defaultExtName)", extensionVarName);
+            methodBuilder.endControlFlow();
+        }
+
+        methodBuilder.beginControlFlow("if ($L == null)", extensionVarName);
+        methodBuilder.addStatement("throw new $T($T.class)", MismatchExtensionException.class, interfaze);
+        methodBuilder.endControlFlow();
+
+        String args = parameters.stream()
+                .map(VariableElement::getSimpleName)
+                .collect(Collectors.joining(", "));
+        if (method.getReturnType().getKind() != TypeKind.VOID) {
+            methodBuilder.addStatement("return $L.$L($L)", extensionVarName, method.getSimpleName(), args);
+        } else {
+            methodBuilder.addStatement("$L.$L($L)", extensionVarName, method.getSimpleName(), args);
+        }
+
+        return methodBuilder.build();
+    }
+
+    protected String newVariableName(Set<String> scope, String varName) {
+        int i = 0;
+        while (scope.contains(varName)) {
+            varName += (i++);
+        }
+
+        scope.add(varName);
+
+        return varName;
+    }
+
+    private MethodSpec generateRetrieveMethod(String methodName, TypeMirror typeMirror, String path) {
+        List<String> propertyNames = Arrays.asList(StringUtils.split(path, "."));
+
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
+                .addModifiers(Modifier.PRIVATE);
+
+        DeclaredType declaredType = (DeclaredType) typeMirror;
+        TypeMirror nextType = declaredType;
+
+        String arg = "arg";
+        String nextArg = arg;
+        builder.addParameter(ClassName.get(typeMirror), arg);
+        for (int i = 0; i < propertyNames.size(); i++) {
+            String propName = propertyNames.get(i);
+            Tuple2<VariableElement, ExecutableElement> t = ElementUtils.findProperty(declaredType, propName);
+            nextArg = "arg" + i;
+            nextType = t._1.asType();
+            String getterName = t._2.getSimpleName().toString();
+            builder.beginControlFlow("if ($L == null)", arg);
+            builder.addStatement("return null");
+            builder.endControlFlow();
+            builder.addStatement("$T $L = $L.$L()", nextType, nextArg, arg, getterName);
+            arg = nextArg;
+        }
+
+        builder.addStatement("return " + nextArg);
+        builder.returns(ClassName.get(nextType));
+
+        return builder.build();
+    }
+
+    private MethodSpec generateUnsupportedMethodSpec(TypeElement interfaze, ExecutableElement method) {
+        MethodSpec.Builder methodBuilder = newMethodBuilder(interfaze, method);
+
+        methodBuilder.addStatement("throw new UnsupportedOperationException()");
+
+        return methodBuilder.build();
+    }
+
+    protected MethodSpec.Builder newMethodBuilder(TypeElement interfaze, ExecutableElement method) {
+        MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(method.getSimpleName().toString())
+                .addModifiers(Modifier.PUBLIC)
+                .returns(ClassName.get(method.getReturnType()));
+
+        List<? extends VariableElement> parameters = method.getParameters();
+
+        for (VariableElement parameter : parameters) {
+            TypeMirror parameterType = parameter.asType();
+            if (parameterType instanceof TypeVariable) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, parameter + " is TypeVariable");
+                TypeMirror resolvedType = findRealType(interfaze, method, (TypeVariable) parameterType);
+                methodBuilder.addParameter(ClassName.get(resolvedType), parameter.getSimpleName().toString());
+            } else {
+                methodBuilder.addParameter(ClassName.get(parameterType), parameter.getSimpleName().toString());
+            }
+        }
+        return methodBuilder;
+    }
+
+    protected TypeMirror doFindRealType(TypeMirror superInterface, ExecutableElement method, TypeVariable typeVariable) {
+        DeclaredType declaredType = (DeclaredType) superInterface;
+
+        Element enclosingElement = method.getEnclosingElement();
+        // 方法定义的接口
+        if (declaredType.asElement().equals(enclosingElement)) {
+            return processingEnv.getTypeUtils().asMemberOf(declaredType, typeVariable.asElement());
+        }
+
+        List<? extends TypeMirror> parentInterfaces = ((TypeElement) ((DeclaredType) superInterface).asElement()).getInterfaces();
+        if (parentInterfaces.isEmpty()) {
+            return null;
+        }
+
+        for (TypeMirror parentInterface : parentInterfaces) {
+            TypeMirror typeMirror = doFindRealType(parentInterface, method, typeVariable);
+            if (typeMirror != null) {
+                return typeMirror;
+            }
+        }
+        return null;
+    }
+
+    protected TypeMirror findRealType(TypeElement interfaze, ExecutableElement method, TypeVariable typeVariable) {
+        if (interfaze.equals(method.getEnclosingElement())) {
+            throw new IllegalArgumentException("ExtensionPoint interface MUST NOT have any type variables");
+        }
+        return doFindRealType(interfaze.asType(), method, typeVariable);
+    }
+
+    /**
+     * 获取所有需要实现的方法
+     */
+    protected List<ExecutableElement> getAllInterfaceMethods() {
+        return ElementFilter.methodsIn(elementUtils.getAllMembers(interfaze))
+                .stream()
+                .filter(m -> !m.getEnclosingElement().equals(objectTypeElement))
+                .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
+                .collect(Collectors.toList());
+    }
+
+    protected static int getAdaptiveParamIndex(ExecutableElement method) {
+        List<? extends VariableElement> parameters = method.getParameters();
+        for (int i = 0; i < parameters.size(); i++) {
+            VariableElement parameter = parameters.get(i);
+            if (parameter.getAnnotation(Adaptive.class) != null){
+                return i;
+            }
+        }
+        return -1;
+    }
+}

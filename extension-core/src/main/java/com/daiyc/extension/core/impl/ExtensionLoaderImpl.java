@@ -2,7 +2,6 @@ package com.daiyc.extension.core.impl;
 
 import com.daiyc.extension.core.ExtensionLoader;
 import com.daiyc.extension.core.ExtensionRegistry;
-import com.daiyc.extension.core.meta.ExtensionPointInfo;
 import com.daiyc.extension.util.NameGenerateUtils;
 import lombok.SneakyThrows;
 import org.apache.commons.beanutils.ConstructorUtils;
@@ -17,15 +16,12 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ExtensionLoaderImpl<T> implements ExtensionLoader<T> {
     private final Class<T> type;
 
-    private final ExtensionPointInfo extensionPointInfo;
-
     private final ExtensionRegistry<T> extensionRegistry;
 
     protected final AtomicReference<T> adaptiveExtension = new AtomicReference<>();
 
     public ExtensionLoaderImpl(Class<T> type, ExtensionRegistry<T> extensionRegistry) {
         this.type = type;
-        this.extensionPointInfo = new ExtensionPointInfo(type);
         this.extensionRegistry = extensionRegistry;
     }
 

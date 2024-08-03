@@ -11,8 +11,7 @@ import java.util.stream.Collectors;
  */
 abstract class AnnotationUtils {
 
-    public static Map<String, AnnotationValue> getAnnotationValues(VariableElement param, Class<?> annClass) {
-        // adaptiveParam.getAnnotationMirrors().get(0).getAnnotationType().asElement().getKind()
+    public static Map<String, AnnotationValue> getAnnotationValues(Element param, Class<?> annClass) {
         AnnotationMirror annotationMirror = param.getAnnotationMirrors()
                 .stream()
                 .filter(ann -> {

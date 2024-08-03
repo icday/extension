@@ -2,6 +2,7 @@ package com.daiyc.extension.core.annotations;
 
 import com.daiyc.extension.core.ExtensionNameConverter;
 import com.daiyc.extension.core.converter.DefaultNameConverter;
+import com.daiyc.extension.core.enums.DegradationStrategy;
 
 import java.lang.annotation.*;
 
@@ -19,9 +20,9 @@ public @interface Adaptive {
     String value() default "";
 
     /**
-     * 当指定参数无法获取
+     * 当找不到匹配扩展时的降级策略
      */
-    boolean useDefault() default false;
+    DegradationStrategy degradationStrategy() default DegradationStrategy.NONE;
 
     /**
      * 将参数转换成 extension name

@@ -13,7 +13,7 @@ import java.lang.annotation.*;
 @Target({ElementType.TYPE})
 public @interface Extension {
     /**
-     * 扩展点处理匹配信息
+     * 扩展实现的唯一名称
      */
     String value();
 }
