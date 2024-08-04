@@ -191,18 +191,24 @@ public class AdaptiveClassGenerator {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PRIVATE);
 
-        DeclaredType declaredType = (DeclaredType) typeMirror;
-        TypeMirror nextType = declaredType;
-
         String arg = "arg";
         String nextArg = arg;
         builder.addParameter(ClassName.get(typeMirror), arg);
+
+        if (typeMirror.getKind() != TypeKind.DECLARED) {
+            builder.addStatement("return " + nextArg);
+            builder.returns(ClassName.get(typeMirror));
+            return builder.build();
+        }
+
+        DeclaredType nextType = (DeclaredType) typeMirror;
+
         for (int i = 0; i < propertyNames.size(); i++) {
             String propName = propertyNames.get(i);
-            Tuple2<VariableElement, ExecutableElement> t = ElementUtils.findProperty(declaredType, propName);
+            Tuple2<VariableElement, ExecutableElement> t = ElementUtils.findProperty(nextType, propName);
             nextArg = "arg" + i;
-            nextType = t._1.asType();
             String getterName = t._2.getSimpleName().toString();
+            nextType = (DeclaredType) t._1.asType();
             builder.beginControlFlow("if ($L == null)", arg);
             builder.addStatement("return null");
             builder.endControlFlow();
