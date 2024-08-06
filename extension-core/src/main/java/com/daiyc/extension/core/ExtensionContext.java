@@ -24,7 +24,7 @@ public class ExtensionContext implements ExtensionLoaderFactory, ExtensionPointR
 
     @Override
     public <I> ExtensionLoader<I> getExtensionLoader(Class<I> clazz) {
-        ExtensionRegistry<?> extensionRegistry = registries.get(clazz);
+        ExtensionRegistry<?> extensionRegistry = registries.computeIfAbsent(clazz, ExtensionRegistryImpl::new);
         return (ExtensionLoader<I>) loaders.computeIfAbsent(clazz, t ->
                 new ExtensionLoaderImpl<>(clazz, (ExtensionRegistry<I>) extensionRegistry));
     }

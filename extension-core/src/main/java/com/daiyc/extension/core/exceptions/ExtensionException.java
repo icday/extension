@@ -18,8 +18,8 @@ public abstract class ExtensionException extends RuntimeException {
         super(message);
     }
 
-    public ExtensionException(String message, Class<?> exceptionPointClass) {
-        super(message);
+    public ExtensionException(Class<?> exceptionPointClass, String message, Object... args) {
+        super(String.format(message, args));
         this.exceptionPointClass = exceptionPointClass;
     }
 }

@@ -16,7 +16,7 @@ public class MismatchExtensionException extends ExtensionException {
         super(message);
     }
 
-    public MismatchExtensionException(String message, Class<?> exceptionPointClass) {
-        super(message, exceptionPointClass);
+    public MismatchExtensionException(Class<?> exceptionPointClass, String message, Object... args) {
+        super(exceptionPointClass, message, args);
     }
 }

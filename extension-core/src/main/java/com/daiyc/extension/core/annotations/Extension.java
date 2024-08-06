@@ -15,5 +15,5 @@ public @interface Extension {
     /**
      * 扩展实现的唯一名称
      */
-    String value();
+    String[] value();
 }

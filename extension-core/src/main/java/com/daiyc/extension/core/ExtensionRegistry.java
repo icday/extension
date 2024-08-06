@@ -9,7 +9,5 @@ import java.util.function.Supplier;
 public interface ExtensionRegistry<T> {
     <C extends T> void register(Class<C> type, Supplier<C> supplier);
 
-    T get();
-
     T get(String name);
 }
