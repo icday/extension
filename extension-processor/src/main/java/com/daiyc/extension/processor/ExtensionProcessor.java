@@ -18,29 +18,71 @@ import java.util.Set;
  */
 @AutoService(Processor.class)
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
-@SupportedAnnotationTypes("com.daiyc.extension.core.annotations.ExtensionPoint")
+@SupportedAnnotationTypes({
+        ExtensionConstants.EXTENSION_POINT,
+        ExtensionConstants.EXTENSION,
+})
 public class ExtensionProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         for (TypeElement annotation : annotations) {
-            for (Element element : roundEnv.getElementsAnnotatedWith(annotation)) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "found @ExtensionPoint at " + element);
-                processPoint(element);
+            String annName = annotation.getQualifiedName().toString();
+            boolean ok = true;
+            if (annName.equals(ExtensionConstants.EXTENSION_POINT)) {
+                ok = handleExtensionPoint(annotation, roundEnv);
+            } else if (annName.equals(ExtensionConstants.EXTENSION)) {
+                ok = handleExtension(annotation, roundEnv);
+            }
+
+            if (!ok) {
+                return false;
             }
         }
         return true;
     }
 
+    protected boolean handleExtensionPoint(TypeElement annotation, RoundEnvironment roundEnv) {
+        for (Element element : roundEnv.getElementsAnnotatedWith(annotation)) {
+            if (!isTypeElement(element)) {
+                continue;
+            }
+
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "found @ExtensionPoint at " + element);
+            if (!processPoint(element)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    protected boolean handleExtension(TypeElement annotation, RoundEnvironment roundEnv) {
+        for (Element element : roundEnv.getElementsAnnotatedWith(annotation)) {
+            if (!isTypeElement(element)) {
+                continue;
+            }
+
+            if (!checkExtension(element, roundEnv)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    protected boolean checkExtension(Element element, RoundEnvironment roundEnv) {
+        return true;
+    }
+
     @SneakyThrows
-    protected void processPoint(Element element) {
+    protected boolean processPoint(Element element) {
         if (!isTypeElement(element)) {
-            return;
+            return true;
         }
 
         TypeElement typeElement = (TypeElement) element;
 
         JavaFile javaFile = generateClass(typeElement);
         javaFile.writeTo(processingEnv.getFiler());
+        return true;
     }
 
     protected JavaFile generateClass(TypeElement interfaze) {
