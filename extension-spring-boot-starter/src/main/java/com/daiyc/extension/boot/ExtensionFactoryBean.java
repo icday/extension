@@ -33,4 +33,9 @@ public class ExtensionFactoryBean<T> implements FactoryBean<T> {
     public Class<?> getObjectType() {
         return extensionPointType;
     }
+
+    @Override
+    public boolean isSingleton() {
+        return true;
+    }
 }

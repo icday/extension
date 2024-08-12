@@ -2,7 +2,7 @@ package com.daiyc.extension.core.impl;
 
 import com.daiyc.extension.core.ExtensionLoader;
 import com.daiyc.extension.core.ExtensionRegistry;
-import com.daiyc.extension.util.NameGenerateUtils;
+import com.daiyc.extension.util.ExtensionNamingUtils;
 import lombok.SneakyThrows;
 import org.apache.commons.beanutils.ConstructorUtils;
 
@@ -37,7 +37,7 @@ public class ExtensionLoaderImpl<T> implements ExtensionLoader<T> {
     @SneakyThrows
     protected T getAdaptiveExtension() {
         ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
-        Class<?> adaptiveClass = contextClassLoader.loadClass(NameGenerateUtils.generateAdaptiveFullClassName(type));
+        Class<?> adaptiveClass = contextClassLoader.loadClass(ExtensionNamingUtils.generateAdaptiveFullClassName(type));
         return (T) ConstructorUtils.invokeConstructor(adaptiveClass,
                 new Object[]{extensionRegistry}, new Class[]{ExtensionRegistry.class});
     }

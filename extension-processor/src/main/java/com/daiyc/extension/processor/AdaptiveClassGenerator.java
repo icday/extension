@@ -8,7 +8,7 @@ import com.daiyc.extension.core.annotations.Adaptive;
 import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
-import com.daiyc.extension.util.NameGenerateUtils;
+import com.daiyc.extension.util.ExtensionNamingUtils;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
@@ -64,7 +64,7 @@ public class AdaptiveClassGenerator {
             return cache;
         }
 
-        TypeSpec.Builder classBuilder = TypeSpec.classBuilder(NameGenerateUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
+        TypeSpec.Builder classBuilder = TypeSpec.classBuilder(ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .addSuperinterface(interfaze.asType())
                 .addSuperinterface(ClassName.get(AdaptiveExtension.class));

@@ -6,8 +6,8 @@ import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.enums.None;
 import com.daiyc.extension.core.exceptions.DuplicateExtensionNameException;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
+import com.daiyc.extension.util.ExtensionNamingUtils;
 import io.vavr.control.Try;
-import org.apache.commons.lang3.CharUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Method;
@@ -65,30 +65,7 @@ public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
         if (!unifyName || StringUtils.isBlank(name)) {
             return name;
         }
-
-        name = StringUtils.trimToEmpty(name);
-        if (name.isEmpty()) {
-            return name;
-        }
-
-        if (StringUtils.contains(name, "-_")) {
-            name = name.replace('-', '_').toLowerCase();
-        } else {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < name.length(); i++) {
-                char ch = name.charAt(i);
-                if (CharUtils.isAsciiAlphaUpper(ch)) {
-                    if (i > 0) {
-                        sb.append('_');
-                    }
-                    sb.append(Character.toLowerCase(ch));
-                } else {
-                    sb.append(ch);
-                }
-            }
-            name = sb.toString();
-        }
-        return name;
+        return ExtensionNamingUtils.unifyExtensionName(name);
     }
 
     @Override
