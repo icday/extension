@@ -8,7 +8,7 @@ import com.daiyc.extension.core.ExtensionNameConverter;
  */
 public class DefaultNameConverter implements ExtensionNameConverter {
     @Override
-    public String convert(Object value) {
+    public String apply(Object value) {
         if (value == null) {
             return null;
         }

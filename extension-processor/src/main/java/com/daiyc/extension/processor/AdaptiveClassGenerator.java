@@ -139,7 +139,7 @@ public class AdaptiveClassGenerator {
         // get converter
         methodBuilder.addStatement("$T $L = $T.getInstance().get($T.class)", ExtensionNameConverter.class, converterVarName, ObjectFactory.class, converterType);
         // do convert
-        methodBuilder.addStatement("String $L = $L.convert($L)", keyStrVarName, converterVarName, keyVarName);
+        methodBuilder.addStatement("String $L = $L.apply($L)", keyStrVarName, converterVarName, keyVarName);
         if (degradationStrategy == DegradationStrategy.DEFAULT_IF_MISMATCH || degradationStrategy == DegradationStrategy.DEFAULT_IF_NULL) {
             methodBuilder.beginControlFlow("if ($L == null)", keyStrVarName);
             methodBuilder.addStatement("$L = this.defaultExtName", keyStrVarName);
