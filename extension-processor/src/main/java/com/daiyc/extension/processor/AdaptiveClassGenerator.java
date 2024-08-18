@@ -8,11 +8,9 @@ import com.daiyc.extension.core.annotations.Adaptive;
 import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
+import com.daiyc.extension.processor.exception.TypeIncompatibleException;
 import com.daiyc.extension.util.ExtensionNamingUtils;
-import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.ParameterizedTypeName;
-import com.squareup.javapoet.TypeSpec;
+import com.squareup.javapoet.*;
 import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import io.vavr.collection.Stream;
@@ -127,6 +125,7 @@ public class AdaptiveClassGenerator {
 
         Tuple2<String, String> retrieveMethodKey = Tuple.of("retrieveKey", ClassName.get(paramType).toString());
         MethodSpec retrieveMethod = helpMethods.computeIfAbsent(retrieveMethodKey, k -> generateRetrieveMethod(k._1, paramType, path));
+        TypeName keyPropertyType = retrieveMethod.returnType;
 
         // 需要定义的局部变量
         String keyVarName = newVariableName(scope, "key");
@@ -135,7 +134,58 @@ public class AdaptiveClassGenerator {
         String converterVarName = newVariableName(scope, "converter");
 
         // get key string
-        methodBuilder.addStatement("Object $L = $L($L)", keyVarName, retrieveMethod.name, adaptiveParam.getSimpleName());
+        methodBuilder.addStatement("$T $L = $L($L)", keyPropertyType, keyVarName, retrieveMethod.name, adaptiveParam.getSimpleName());
+
+        List<AnnotationMirror> toEnums = (List<AnnotationMirror>) annotationValues.get("toEnum").getValue();
+        if (toEnums.size() > 1) {
+            throw new IllegalArgumentException("@Adaptive(toEnum) can ONLY contains ONE element");
+        }
+        if (!toEnums.isEmpty()) {
+            Map<String, AnnotationValue> toEnumAnnValues = AnnotationUtils.getAnnotationValues(toEnums.get(0));
+            DeclaredType enumType = (DeclaredType) toEnumAnnValues.get("enumClass").getValue();
+
+            String byMethod = toEnumAnnValues.get("byMethod").getValue().toString();
+            String byField = toEnumAnnValues.get("byField").getValue().toString();
+            boolean byOrdinal = (boolean) toEnumAnnValues.get("byOrdinal").getValue();
+
+            int flag = 0;
+            if (StringUtils.isNotBlank(byMethod)) {
+                flag ++;
+            }
+            if (StringUtils.isNotBlank(byField)) {
+                flag ++;
+            }
+            if (byOrdinal) {
+                flag ++;
+            }
+
+            if (flag == 0) {
+                throw new IllegalArgumentException("@ToEnum MUST specify any of byMethod, byField or byOrdinal strategy");
+            }
+
+            if (flag > 1) {
+                throw new IllegalArgumentException("@ToEnum MUST ONLY specify one of byMethod, byField or byOrdinal strategy");
+            }
+
+            String keyEnumVarName = "keyEnum";
+
+            if (StringUtils.isNotBlank(byMethod)) {
+                methodBuilder.addStatement("$T $L = $T.$L($L)", enumType, keyEnumVarName, enumType, byMethod, keyVarName);
+            } else if (byOrdinal) {
+                if (!TypeUtils.box(keyPropertyType).equals(TypeName.INT.box())) {
+                    throw new TypeIncompatibleException("Adaptive to enum value MUST BE int or integer type", interfaze);
+                }
+
+                methodBuilder.addStatement("$T $L = $T.of($T.values()).filter(e -> $T.equals(e.ordinal(), $L)).findFirst().get()",
+                        enumType, keyEnumVarName, java.util.stream.Stream.class, enumType, Objects.class, keyVarName);
+            } else if (StringUtils.isNotBlank(byField)) {
+                ExecutableElement getterMethod = ElementUtils.findProperty(enumType, byField)._2();
+                methodBuilder.addStatement("$T $L = $T.of($T.values()).filter(e -> Objects.equals(e.$L(), $L)).findFirst().get()",
+                        enumType, keyEnumVarName, java.util.stream.Stream.class, enumType, getterMethod.getSimpleName(), keyVarName);
+            }
+            keyVarName = keyEnumVarName;
+        }
+
         // get converter
         methodBuilder.addStatement("$T $L = $T.getInstance().get($T.class)", ExtensionNameConverter.class, converterVarName, ObjectFactory.class, converterType);
         // do convert
@@ -185,39 +235,44 @@ public class AdaptiveClassGenerator {
         return varName;
     }
 
-    private MethodSpec generateRetrieveMethod(String methodName, TypeMirror typeMirror, String path) {
+    /**
+     * 生成获取 key 值的辅助方法
+     *
+     * @param methodName 辅助方法名
+     * @param paramType  参数类型
+     * @param path       参数路径
+     */
+    private MethodSpec generateRetrieveMethod(String methodName, TypeMirror paramType, String path) {
         List<String> propertyNames = Arrays.asList(StringUtils.split(path, "."));
+        TypeMirror returnType = ElementUtils.getDestType(paramType, propertyNames);
 
+        String baseArg = "arg";
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
-                .addModifiers(Modifier.PRIVATE);
+                .addModifiers(Modifier.PRIVATE)
+                .addParameter(ClassName.get(paramType), baseArg)
+                .returns(TypeName.get(returnType));
 
-        String arg = "arg";
-        String nextArg = arg;
-        builder.addParameter(ClassName.get(typeMirror), arg);
+        Stream.ofAll(propertyNames)
+                .foldLeft(Tuple.of(0, baseArg, paramType), (cur, propName) -> cur.apply((i, varName, varType) -> {
+                    assert varType.getKind() == TypeKind.DECLARED;
+                    Tuple2<VariableElement, ExecutableElement> property = ElementUtils.findProperty((DeclaredType) varType, propName);
+                    builder.beginControlFlow("if ($L == null)", varName);
+                    if (returnType.getKind().isPrimitive()) {
+                        builder.addStatement("throw new $T()", NullPointerException.class);
+                    } else {
+                        builder.addStatement("return null");
+                    }
+                    builder.endControlFlow();
 
-        if (typeMirror.getKind() != TypeKind.DECLARED) {
-            builder.addStatement("return " + nextArg);
-            builder.returns(ClassName.get(typeMirror));
-            return builder.build();
-        }
-
-        DeclaredType nextType = (DeclaredType) typeMirror;
-
-        for (int i = 0; i < propertyNames.size(); i++) {
-            String propName = propertyNames.get(i);
-            Tuple2<VariableElement, ExecutableElement> t = ElementUtils.findProperty(nextType, propName);
-            nextArg = "arg" + i;
-            String getterName = t._2.getSimpleName().toString();
-            nextType = (DeclaredType) t._1.asType();
-            builder.beginControlFlow("if ($L == null)", arg);
-            builder.addStatement("return null");
-            builder.endControlFlow();
-            builder.addStatement("$T $L = $L.$L()", nextType, nextArg, arg, getterName);
-            arg = nextArg;
-        }
-
-        builder.addStatement("return " + nextArg);
-        builder.returns(ClassName.get(nextType));
+                    return property.apply((var, getter) -> {
+                        String nextArgName = baseArg + i;
+                        builder.addStatement("$T $L = $L.$L()", var.asType(), nextArgName, varName, getter.getSimpleName().toString());
+                        return Tuple.of(i + 1, nextArgName, var.asType());
+                    });
+                })).apply((i, curArg, type) -> {
+                    builder.addStatement("return " + curArg);
+                    return null;
+                });
 
         return builder.build();
     }
@@ -295,7 +350,7 @@ public class AdaptiveClassGenerator {
         List<? extends VariableElement> parameters = method.getParameters();
         for (int i = 0; i < parameters.size(); i++) {
             VariableElement parameter = parameters.get(i);
-            if (parameter.getAnnotation(Adaptive.class) != null){
+            if (parameter.getAnnotation(Adaptive.class) != null) {
                 return i;
             }
         }

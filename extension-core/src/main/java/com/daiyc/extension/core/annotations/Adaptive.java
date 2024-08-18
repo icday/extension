@@ -3,7 +3,6 @@ package com.daiyc.extension.core.annotations;
 import com.daiyc.extension.core.ExtensionNameConverter;
 import com.daiyc.extension.core.converter.DefaultNameConverter;
 import com.daiyc.extension.core.enums.DegradationStrategy;
-import com.daiyc.extension.core.enums.EnumSearchType;
 
 import java.lang.annotation.*;
 
@@ -26,9 +25,10 @@ public @interface Adaptive {
     DegradationStrategy degradationStrategy() default DegradationStrategy.NONE;
 
     /**
-     * 指定的参数是 int 类型时，可以转换成一个枚举值，用于匹配对应的扩展名称。
+     * 指定的参数是 int 类型时，可以转换成一个枚举值，用于匹配对应的扩展名称。<br/>
+     * 只能设置一个值
      */
-    IntToEnum intToEnum();
+    ToEnum[] toEnum() default {};
 
     /**
      * 将参数转换成 extension name
@@ -37,20 +37,25 @@ public @interface Adaptive {
 
     @Retention(RetentionPolicy.RUNTIME)
     @Target({})
-    @interface IntToEnum {
+    @interface ToEnum {
         /**
          * 枚举类
          */
-        Class<? extends Enum<?>> value();
+        Class<? extends Enum<?>> enumClass();
 
         /**
-         * 转换方式
+         * 通过静态方法映射枚举值，指定对应方法名
          */
-        EnumSearchType type() default EnumSearchType.ORDINAL;
+        String byMethod() default "";
 
         /**
-         * 具体的转换方法或者字段
+         * 通过字段找到对应的枚举值
          */
-        String name() default "";
+        String byField() default "";
+
+        /**
+         * 通过 ordinal 映射成枚举值
+         */
+        boolean byOrdinal() default false;
     }
 }

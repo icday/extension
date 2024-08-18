@@ -21,12 +21,17 @@ abstract class AnnotationUtils {
                 .findFirst()
                 .orElse(null);
 
+        return getAnnotationValues(annotationMirror);
+    }
+
+    public static Map<String, AnnotationValue> getAnnotationValues(AnnotationMirror annotationMirror) {
         Map<String, AnnotationValue> defaultValues = new HashMap<>();
         if (annotationMirror != null) {
             defaultValues = annotationMirror.getAnnotationType().asElement().getEnclosedElements()
                     .stream()
                     .filter(el -> el.getKind() == ElementKind.METHOD)
                     .map(el -> (ExecutableElement) el)
+                    .filter(el -> el.getDefaultValue() != null)
                     .collect(Collectors.toMap(el -> el.getSimpleName().toString(), ExecutableElement::getDefaultValue));
         }
 
