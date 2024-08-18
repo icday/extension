@@ -12,7 +12,7 @@
 
     <groupId>com.daiyc.extension</groupId>
     <artifactId>extension-parent</artifactId>
-    <version>1.2.0</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
     <modules>
         <module>extension-core</module>
@@ -21,6 +21,7 @@
     </modules>
 
     <properties>
+        <revision>1.2.0</revision>
         <maven.deploy.version>2.8.2</maven.deploy.version>
         <nexus.staging.version>1.6.8</nexus.staging.version>
         <maven.release.version>2.5.3</maven.release.version>
@@ -79,11 +80,6 @@
                 <groupId>commons-beanutils</groupId>
                 <artifactId>commons-beanutils</artifactId>
                 <version>1.9.4</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-lang3</artifactId>
-                <version>3.12.0</version>
             </dependency>
             <dependency>
                 <groupId>org.mapstruct</groupId>
