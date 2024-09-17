@@ -23,12 +23,12 @@ public @interface ExtensionPoint {
     /**
      * 限制扩展实现名称只能与枚举名称保持一致
      */
-    Class<? extends Enum<?>> enumerable() default None.class;
+    Class<? extends Enum<?>> enumType() default None.class;
 
     /**
      * 如果未定义枚举，也想限制扩展实现名称只能为以下值
      */
-    String[] names() default {};
+    String[] allowNames() default {};
 
     /**
      * 将驼峰、下划线形式的名称都统一化

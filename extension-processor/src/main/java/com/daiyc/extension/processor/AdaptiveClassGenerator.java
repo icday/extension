@@ -1,5 +1,9 @@
 package com.daiyc.extension.processor;
 
+import com.daiyc.extension.adaptive.matcher.PatternMatcher;
+import com.daiyc.extension.adaptive.matcher.PatternMatchers;
+import com.daiyc.extension.adaptive.matcher.TypeMatcher;
+import com.daiyc.extension.adaptive.matcher.TypeMatchers;
 import com.daiyc.extension.core.AdaptiveExtension;
 import com.daiyc.extension.core.ExtensionNameConverter;
 import com.daiyc.extension.core.ExtensionRegistry;
@@ -9,11 +13,14 @@ import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
 import com.daiyc.extension.processor.exception.TypeIncompatibleException;
+import com.daiyc.extension.processor.meta.AdaptiveMeta;
 import com.daiyc.extension.util.ExtensionNamingUtils;
 import com.squareup.javapoet.*;
 import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import io.vavr.collection.Stream;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -33,6 +40,7 @@ import java.util.stream.Collectors;
  * @author daiyc
  * @since 2024/7/31
  */
+@SuppressWarnings("unchecked")
 public class AdaptiveClassGenerator {
     protected final ProcessingEnvironment processingEnv;
 
@@ -46,7 +54,15 @@ public class AdaptiveClassGenerator {
 
     protected final Map<Tuple2<String, String>, MethodSpec> helpMethods = new HashMap<>();
 
+    protected final Scope classScope = new Scope();
+
     protected TypeSpec cache = null;
+
+    protected final TypeSpec.Builder classBuilder;
+
+    private DeclaredType enumType;
+
+    private List<String> allowNames = Collections.emptyList();
 
     public AdaptiveClassGenerator(ProcessingEnvironment processingEnv, TypeElement interfaze) {
         this.processingEnv = processingEnv;
@@ -55,6 +71,11 @@ public class AdaptiveClassGenerator {
         this.typeUtils = processingEnv.getTypeUtils();
 
         this.objectTypeElement = elementUtils.getTypeElement("java.lang.Object");
+
+        classBuilder = TypeSpec.classBuilder(ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addSuperinterface(interfaze.asType())
+                .addSuperinterface(ClassName.get(AdaptiveExtension.class));
     }
 
     public TypeSpec generate() {
@@ -62,13 +83,15 @@ public class AdaptiveClassGenerator {
             return cache;
         }
 
-        TypeSpec.Builder classBuilder = TypeSpec.classBuilder(ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
-                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                .addSuperinterface(interfaze.asType())
-                .addSuperinterface(ClassName.get(AdaptiveExtension.class));
-
         ParameterizedTypeName registryType = ParameterizedTypeName.get(ClassName.get(ExtensionRegistry.class), ClassName.get(interfaze));
-        String defaultExtName = (String) AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class).get("value").getValue();
+        Map<String, AnnotationValue> extensionPointAnnValues = AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class);
+        String defaultExtName = (String) extensionPointAnnValues.get("value").getValue();
+        allowNames = ((List<AnnotationValue>) extensionPointAnnValues.get("allowNames").getValue())
+                .stream()
+                .map(v -> v.getValue().toString())
+                .collect(Collectors.toList());
+
+        this.enumType = AnnotationUtils.getEnumType(extensionPointAnnValues, "enumType");
 
         classBuilder
                 .addField(registryType, "registry", Modifier.PROTECTED, Modifier.FINAL)
@@ -105,20 +128,15 @@ public class AdaptiveClassGenerator {
         MethodSpec.Builder methodBuilder = newMethodBuilder(interfaze, method);
 
         List<? extends VariableElement> parameters = method.getParameters();
+        Scope scope = Scope.fromFunction(parameters);
 
-        Set<String> scope = parameters.stream()
-                .map(VariableElement::getSimpleName)
-                .map(Object::toString)
-                .collect(Collectors.toSet());
+        VariableElement adaptiveParam = getAdaptiveParam(method);
 
-        int adaptiveParamIndex = getAdaptiveParamIndex(method);
-        VariableElement adaptiveParam = parameters.get(adaptiveParamIndex);
+        AdaptiveMeta adaptiveMeta = AnnotationUtils.readAdaptive(adaptiveParam);
+        adaptiveMeta.validate();
 
-        Map<String, AnnotationValue> annotationValues = AnnotationUtils.getAnnotationValues(adaptiveParam, Adaptive.class);
-        TypeMirror converterType = (TypeMirror) annotationValues.get("converter").getValue();
-        String path = annotationValues.get("value").getValue().toString();
-        String degradationStrategyName = annotationValues.get("degradationStrategy").getValue().toString();
-        DegradationStrategy degradationStrategy = DegradationStrategy.valueOf(degradationStrategyName);
+        String path = adaptiveMeta.getValue();
+        DegradationStrategy degradationStrategy = adaptiveMeta.getDegradationStrategy();
 
         // retrieve method
         TypeMirror paramType = adaptiveParam.asType();
@@ -128,46 +146,24 @@ public class AdaptiveClassGenerator {
         TypeName keyPropertyType = retrieveMethod.returnType;
 
         // 需要定义的局部变量
-        String keyVarName = newVariableName(scope, "key");
-        String keyStrVarName = newVariableName(scope, "keyStr");
-        String extensionVarName = newVariableName(scope, "extension");
-        String converterVarName = newVariableName(scope, "converter");
+        String keyVarName = scope.newVar("key");
+        String keyStrVarName = scope.newVar("keyStr");
+        String extensionVarName = scope.newVar("extension");
+        String converterVarName = scope.newVar("converter");
 
-        // get key string
+        // 读取指定路径的参数
         methodBuilder.addStatement("$T $L = $L($L)", keyPropertyType, keyVarName, retrieveMethod.name, adaptiveParam.getSimpleName());
+        methodBuilder.addStatement("$T $L = $T.getInstance().get($T.class)", ExtensionNameConverter.class, converterVarName, ObjectFactory.class, adaptiveMeta.getConverter());
 
-        List<AnnotationMirror> toEnums = (List<AnnotationMirror>) annotationValues.get("toEnum").getValue();
-        if (toEnums.size() > 1) {
-            throw new IllegalArgumentException("@Adaptive(toEnum) can ONLY contains ONE element");
-        }
-        if (!toEnums.isEmpty()) {
-            Map<String, AnnotationValue> toEnumAnnValues = AnnotationUtils.getAnnotationValues(toEnums.get(0));
-            DeclaredType enumType = (DeclaredType) toEnumAnnValues.get("enumClass").getValue();
+        if (CollectionUtils.isNotEmpty(adaptiveMeta.getToEnums())) {
+            AdaptiveMeta.ToEnumMeta toEnumMeta = adaptiveMeta.getToEnums().get(0);
+            DeclaredType enumType = ObjectUtils.defaultIfNull(toEnumMeta.getEnumType(), this.enumType);
 
-            String byMethod = toEnumAnnValues.get("byMethod").getValue().toString();
-            String byField = toEnumAnnValues.get("byField").getValue().toString();
-            boolean byOrdinal = (boolean) toEnumAnnValues.get("byOrdinal").getValue();
+            String byMethod = toEnumMeta.getByMethod();
+            String byField = toEnumMeta.getByField();
+            boolean byOrdinal = toEnumMeta.isByOrdinal();
 
-            int flag = 0;
-            if (StringUtils.isNotBlank(byMethod)) {
-                flag ++;
-            }
-            if (StringUtils.isNotBlank(byField)) {
-                flag ++;
-            }
-            if (byOrdinal) {
-                flag ++;
-            }
-
-            if (flag == 0) {
-                throw new IllegalArgumentException("@ToEnum MUST specify any of byMethod, byField or byOrdinal strategy");
-            }
-
-            if (flag > 1) {
-                throw new IllegalArgumentException("@ToEnum MUST ONLY specify one of byMethod, byField or byOrdinal strategy");
-            }
-
-            String keyEnumVarName = "keyEnum";
+            String keyEnumVarName = scope.newVar("keyEnum");
 
             if (StringUtils.isNotBlank(byMethod)) {
                 methodBuilder.addStatement("$T $L = $T.$L($L)", enumType, keyEnumVarName, enumType, byMethod, keyVarName);
@@ -180,16 +176,52 @@ public class AdaptiveClassGenerator {
                         enumType, keyEnumVarName, java.util.stream.Stream.class, enumType, Objects.class, keyVarName);
             } else if (StringUtils.isNotBlank(byField)) {
                 ExecutableElement getterMethod = ElementUtils.findProperty(enumType, byField)._2();
-                methodBuilder.addStatement("$T $L = $T.of($T.values()).filter(e -> Objects.equals(e.$L(), $L)).findFirst().get()",
-                        enumType, keyEnumVarName, java.util.stream.Stream.class, enumType, getterMethod.getSimpleName(), keyVarName);
+                methodBuilder.addStatement("$T $L = $T.of($T.values()).filter(e -> $T.equals(e.$L(), $L)).findFirst().get()",
+                        enumType, keyEnumVarName, java.util.stream.Stream.class, enumType, Objects.class, getterMethod.getSimpleName(), keyVarName);
             }
-            keyVarName = keyEnumVarName;
+            methodBuilder.addStatement("$T $L = $L.apply($L)", String.class, keyStrVarName, converterVarName, keyEnumVarName);
+        } else if (CollectionUtils.isNotEmpty(adaptiveMeta.getByTypes())) {
+            String varTypeMatchers = classScope.newVar("typeMatchers");
+            FieldSpec.Builder fieldBuilder = FieldSpec.builder(TypeMatchers.class, varTypeMatchers, Modifier.PROTECTED, Modifier.FINAL);
+            List<AdaptiveMeta.ByTypeMeta> byTypes = adaptiveMeta.getByTypes();
+            CodeBlock.Builder codeBlockBuilder = CodeBlock.builder();
+            codeBlockBuilder.add("$T.as(", TypeMatchers.class);
+            for (AdaptiveMeta.ByTypeMeta byType : byTypes) {
+                codeBlockBuilder.add("$T.as($S", TypeMatcher.class, byType.getName());
+                for (DeclaredType type : byType.getTypes()) {
+                    codeBlockBuilder.add(", $T.class", type);
+                }
+                codeBlockBuilder.add(")");
+            }
+            codeBlockBuilder.add(")");
+            fieldBuilder.initializer(codeBlockBuilder.build());
+            classBuilder.addField(fieldBuilder.build());
+
+            methodBuilder.addStatement("$T $L = $L.apply($L.findExt($L))", String.class, keyStrVarName, converterVarName, varTypeMatchers, keyVarName);
+        } else if (CollectionUtils.isNotEmpty(adaptiveMeta.getByPatterns())) {
+            String varPatternMatchers = classScope.newVar("patternMatchers");
+            FieldSpec.Builder fieldBuilder = FieldSpec.builder(PatternMatchers.class, varPatternMatchers, Modifier.PROTECTED, Modifier.FINAL);
+            List<AdaptiveMeta.ByPatternMeta> byPatterns = adaptiveMeta.getByPatterns();
+            CodeBlock.Builder codeBlockBuilder = CodeBlock.builder();
+            codeBlockBuilder.add("$T.as(", PatternMatchers.class);
+            for (AdaptiveMeta.ByPatternMeta byPattern : byPatterns) {
+                codeBlockBuilder.add("$T.as($S", PatternMatcher.class, byPattern.getName());
+                for (String pattern : byPattern.getPatterns()) {
+                    codeBlockBuilder.add(", $S", pattern);
+                }
+                codeBlockBuilder.add(")");
+            }
+            codeBlockBuilder.add(")");
+            fieldBuilder.initializer(codeBlockBuilder.build());
+            classBuilder.addField(fieldBuilder.build());
+
+            methodBuilder.addStatement("$T $L = $L.apply($L.findExt($L))", String.class, keyStrVarName, converterVarName, varPatternMatchers, keyVarName);
+        } else {
+            methodBuilder.addStatement("$T $L = $L.apply($L)", String.class, keyStrVarName, converterVarName, keyVarName);
         }
 
         // get converter
-        methodBuilder.addStatement("$T $L = $T.getInstance().get($T.class)", ExtensionNameConverter.class, converterVarName, ObjectFactory.class, converterType);
         // do convert
-        methodBuilder.addStatement("String $L = $L.apply($L)", keyStrVarName, converterVarName, keyVarName);
         if (degradationStrategy == DegradationStrategy.DEFAULT_IF_MISMATCH || degradationStrategy == DegradationStrategy.DEFAULT_IF_NULL) {
             methodBuilder.beginControlFlow("if ($L == null)", keyStrVarName);
             methodBuilder.addStatement("$L = this.defaultExtName", keyStrVarName);
@@ -222,17 +254,6 @@ public class AdaptiveClassGenerator {
         }
 
         return methodBuilder.build();
-    }
-
-    protected String newVariableName(Set<String> scope, String varName) {
-        int i = 0;
-        while (scope.contains(varName)) {
-            varName += (i++);
-        }
-
-        scope.add(varName);
-
-        return varName;
     }
 
     /**
@@ -344,6 +365,11 @@ public class AdaptiveClassGenerator {
                 .filter(m -> !m.getEnclosingElement().equals(objectTypeElement))
                 .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
                 .collect(Collectors.toList());
+    }
+
+    protected static VariableElement getAdaptiveParam(ExecutableElement method) {
+        int idx = getAdaptiveParamIndex(method);
+        return method.getParameters().get(idx);
     }
 
     protected static int getAdaptiveParamIndex(ExecutableElement method) {

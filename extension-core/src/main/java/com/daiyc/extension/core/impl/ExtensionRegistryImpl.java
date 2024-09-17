@@ -45,18 +45,18 @@ public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
     }
 
     protected Set<String> getAvailableNames(ExtensionPoint ann) {
-        Class<? extends Enum<?>> enumClass = ann.enumerable();
-        if (enumClass != null && !enumClass.equals(None.class)) {
+        Class<? extends Enum<?>> enumType = ann.enumType();
+        if (enumType != null && !enumType.equals(None.class)) {
             return Try.of(() -> {
-                Method m = enumClass.getMethod("values");
-                return Stream.of((Enum[]) m.invoke(enumClass))
+                Method m = enumType.getMethod("values");
+                return Stream.of((Enum[]) m.invoke(enumType))
                         .map(Enum::name)
                         .map(this::format)
                         .collect(Collectors.toSet());
             }).getOrElse(Collections.emptySet());
         }
 
-        return Stream.of(ann.names())
+        return Stream.of(ann.allowNames())
                 .map(this::format)
                 .collect(Collectors.toSet());
     }

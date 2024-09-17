@@ -61,6 +61,12 @@ abstract class ElementUtils {
         return Tuple.of(field, getter);
     }
 
+    static TypeMirror getDestType(TypeMirror type, String path) {
+        List<String> propertyNames = Arrays.asList(StringUtils.split(path, "."));
+        return getDestType(type, propertyNames);
+    }
+
+
     static TypeMirror getDestType(TypeMirror type, List<String> propNames) {
         return Stream.ofAll(propNames)
                 .foldLeft(type, (type0, prop) -> {
