@@ -181,39 +181,11 @@ public class AdaptiveClassGenerator {
             }
             methodBuilder.addStatement("$T $L = $L.apply($L)", String.class, keyStrVarName, converterVarName, keyEnumVarName);
         } else if (CollectionUtils.isNotEmpty(adaptiveMeta.getByTypes())) {
-            String varTypeMatchers = classScope.newVar("typeMatchers");
-            FieldSpec.Builder fieldBuilder = FieldSpec.builder(TypeMatchers.class, varTypeMatchers, Modifier.PROTECTED, Modifier.FINAL);
-            List<AdaptiveMeta.ByTypeMeta> byTypes = adaptiveMeta.getByTypes();
-            CodeBlock.Builder codeBlockBuilder = CodeBlock.builder();
-            codeBlockBuilder.add("$T.as(", TypeMatchers.class);
-            for (AdaptiveMeta.ByTypeMeta byType : byTypes) {
-                codeBlockBuilder.add("$T.as($S", TypeMatcher.class, byType.getName());
-                for (DeclaredType type : byType.getTypes()) {
-                    codeBlockBuilder.add(", $T.class", type);
-                }
-                codeBlockBuilder.add(")");
-            }
-            codeBlockBuilder.add(")");
-            fieldBuilder.initializer(codeBlockBuilder.build());
-            classBuilder.addField(fieldBuilder.build());
+            String varTypeMatchers = addTypeMatchStatements(adaptiveMeta);
 
             methodBuilder.addStatement("$T $L = $L.apply($L.findExt($L))", String.class, keyStrVarName, converterVarName, varTypeMatchers, keyVarName);
         } else if (CollectionUtils.isNotEmpty(adaptiveMeta.getByPatterns())) {
-            String varPatternMatchers = classScope.newVar("patternMatchers");
-            FieldSpec.Builder fieldBuilder = FieldSpec.builder(PatternMatchers.class, varPatternMatchers, Modifier.PROTECTED, Modifier.FINAL);
-            List<AdaptiveMeta.ByPatternMeta> byPatterns = adaptiveMeta.getByPatterns();
-            CodeBlock.Builder codeBlockBuilder = CodeBlock.builder();
-            codeBlockBuilder.add("$T.as(", PatternMatchers.class);
-            for (AdaptiveMeta.ByPatternMeta byPattern : byPatterns) {
-                codeBlockBuilder.add("$T.as($S", PatternMatcher.class, byPattern.getName());
-                for (String pattern : byPattern.getPatterns()) {
-                    codeBlockBuilder.add(", $S", pattern);
-                }
-                codeBlockBuilder.add(")");
-            }
-            codeBlockBuilder.add(")");
-            fieldBuilder.initializer(codeBlockBuilder.build());
-            classBuilder.addField(fieldBuilder.build());
+            String varPatternMatchers = addPatternMatchStatements(adaptiveMeta);
 
             methodBuilder.addStatement("$T $L = $L.apply($L.findExt($L))", String.class, keyStrVarName, converterVarName, varPatternMatchers, keyVarName);
         } else {
@@ -254,6 +226,44 @@ public class AdaptiveClassGenerator {
         }
 
         return methodBuilder.build();
+    }
+
+    private String addPatternMatchStatements(AdaptiveMeta adaptiveMeta) {
+        String varPatternMatchers = classScope.newVar("patternMatchers");
+        FieldSpec.Builder fieldBuilder = FieldSpec.builder(PatternMatchers.class, varPatternMatchers, Modifier.PROTECTED, Modifier.FINAL);
+        List<AdaptiveMeta.ByPatternMeta> byPatterns = adaptiveMeta.getByPatterns();
+        CodeBlock.Builder codeBlockBuilder = CodeBlock.builder();
+        codeBlockBuilder.add("$T.as(", PatternMatchers.class);
+        for (AdaptiveMeta.ByPatternMeta byPattern : byPatterns) {
+            codeBlockBuilder.add("$T.as($S", PatternMatcher.class, byPattern.getName());
+            for (String pattern : byPattern.getPatterns()) {
+                codeBlockBuilder.add(", $S", pattern);
+            }
+            codeBlockBuilder.add(")");
+        }
+        codeBlockBuilder.add(")");
+        fieldBuilder.initializer(codeBlockBuilder.build());
+        classBuilder.addField(fieldBuilder.build());
+        return varPatternMatchers;
+    }
+
+    private String addTypeMatchStatements(AdaptiveMeta adaptiveMeta) {
+        String varTypeMatchers = classScope.newVar("typeMatchers");
+        FieldSpec.Builder fieldBuilder = FieldSpec.builder(TypeMatchers.class, varTypeMatchers, Modifier.PROTECTED, Modifier.FINAL);
+        List<AdaptiveMeta.ByTypeMeta> byTypes = adaptiveMeta.getByTypes();
+        CodeBlock.Builder codeBlockBuilder = CodeBlock.builder();
+        codeBlockBuilder.add("$T.as(", TypeMatchers.class);
+        for (AdaptiveMeta.ByTypeMeta byType : byTypes) {
+            codeBlockBuilder.add("$T.as($S", TypeMatcher.class, byType.getName());
+            for (DeclaredType type : byType.getTypes()) {
+                codeBlockBuilder.add(", $T.class", type);
+            }
+            codeBlockBuilder.add(")");
+        }
+        codeBlockBuilder.add(")");
+        fieldBuilder.initializer(codeBlockBuilder.build());
+        classBuilder.addField(fieldBuilder.build());
+        return varTypeMatchers;
     }
 
     /**
