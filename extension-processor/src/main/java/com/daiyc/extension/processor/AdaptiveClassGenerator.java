@@ -14,6 +14,7 @@ import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
 import com.daiyc.extension.processor.exception.TypeIncompatibleException;
 import com.daiyc.extension.processor.meta.AdaptiveMeta;
+import com.daiyc.extension.processor.meta.ExtensionPointMeta;
 import com.daiyc.extension.util.ExtensionNamingUtils;
 import com.squareup.javapoet.*;
 import io.vavr.Tuple;
@@ -60,9 +61,7 @@ public class AdaptiveClassGenerator {
 
     protected final TypeSpec.Builder classBuilder;
 
-    private DeclaredType enumType;
-
-    private List<String> allowNames = Collections.emptyList();
+    protected ExtensionPointMeta extensionPointMeta;
 
     public AdaptiveClassGenerator(ProcessingEnvironment processingEnv, TypeElement interfaze) {
         this.processingEnv = processingEnv;
@@ -76,6 +75,13 @@ public class AdaptiveClassGenerator {
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .addSuperinterface(interfaze.asType())
                 .addSuperinterface(ClassName.get(AdaptiveExtension.class));
+
+        init();
+    }
+
+    protected void init() {
+        Map<String, AnnotationValue> extensionPointAnnValues = AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class);
+        extensionPointMeta = AnnotationUtils.readExtensionPoint(extensionPointAnnValues);
     }
 
     public TypeSpec generate() {
@@ -84,25 +90,22 @@ public class AdaptiveClassGenerator {
         }
 
         ParameterizedTypeName registryType = ParameterizedTypeName.get(ClassName.get(ExtensionRegistry.class), ClassName.get(interfaze));
-        Map<String, AnnotationValue> extensionPointAnnValues = AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class);
-        String defaultExtName = (String) extensionPointAnnValues.get("value").getValue();
-        allowNames = ((List<AnnotationValue>) extensionPointAnnValues.get("allowNames").getValue())
-                .stream()
-                .map(v -> v.getValue().toString())
-                .collect(Collectors.toList());
 
-        this.enumType = AnnotationUtils.getEnumType(extensionPointAnnValues, "enumType");
+        classBuilder.addField(registryType, "registry", Modifier.PROTECTED, Modifier.FINAL);
 
-        classBuilder
-                .addField(registryType, "registry", Modifier.PROTECTED, Modifier.FINAL)
-                .addField(String.class, "defaultExtName", Modifier.PROTECTED, Modifier.FINAL);
+        FieldSpec.Builder defaultExtNameBuilder = FieldSpec.builder(String.class, "defaultExtName", Modifier.PROTECTED, Modifier.FINAL);
+        if (StringUtils.isNotBlank(extensionPointMeta.getValue())) {
+            defaultExtNameBuilder.initializer("$S", extensionPointMeta.getValue());
+        } else {
+            defaultExtNameBuilder.initializer("null");
+        }
+        classBuilder.addField(defaultExtNameBuilder.build());
 
         classBuilder.addMethod(
                 MethodSpec.constructorBuilder()
                         .addModifiers(Modifier.PUBLIC)
                         .addParameter(registryType, "registry")
                         .addStatement("this.registry = registry")
-                        .addStatement("this.defaultExtName = $S", defaultExtName)
                         .build()
         );
 
@@ -157,7 +160,7 @@ public class AdaptiveClassGenerator {
 
         if (CollectionUtils.isNotEmpty(adaptiveMeta.getToEnums())) {
             AdaptiveMeta.ToEnumMeta toEnumMeta = adaptiveMeta.getToEnums().get(0);
-            DeclaredType enumType = ObjectUtils.defaultIfNull(toEnumMeta.getEnumType(), this.enumType);
+            DeclaredType enumType = ObjectUtils.defaultIfNull(toEnumMeta.getEnumType(), this.extensionPointMeta.getEnumType());
 
             String byMethod = toEnumMeta.getByMethod();
             String byField = toEnumMeta.getByField();
@@ -181,11 +184,11 @@ public class AdaptiveClassGenerator {
             }
             methodBuilder.addStatement("$T $L = $L.apply($L)", String.class, keyStrVarName, converterVarName, keyEnumVarName);
         } else if (CollectionUtils.isNotEmpty(adaptiveMeta.getByTypes())) {
-            String varTypeMatchers = addTypeMatchStatements(adaptiveMeta);
+            String varTypeMatchers = registerTypeMatchersField(adaptiveMeta);
 
             methodBuilder.addStatement("$T $L = $L.apply($L.findExt($L))", String.class, keyStrVarName, converterVarName, varTypeMatchers, keyVarName);
         } else if (CollectionUtils.isNotEmpty(adaptiveMeta.getByPatterns())) {
-            String varPatternMatchers = addPatternMatchStatements(adaptiveMeta);
+            String varPatternMatchers = registerPatternMatchersField(adaptiveMeta);
 
             methodBuilder.addStatement("$T $L = $L.apply($L.findExt($L))", String.class, keyStrVarName, converterVarName, varPatternMatchers, keyVarName);
         } else {
@@ -228,7 +231,12 @@ public class AdaptiveClassGenerator {
         return methodBuilder.build();
     }
 
-    private String addPatternMatchStatements(AdaptiveMeta adaptiveMeta) {
+    /**
+     * 为类新增一个 patternMatchers 属性，并填充属性值
+     * @param adaptiveMeta Adaptive 信息
+     * @return 属性名
+     */
+    private String registerPatternMatchersField(AdaptiveMeta adaptiveMeta) {
         String varPatternMatchers = classScope.newVar("patternMatchers");
         FieldSpec.Builder fieldBuilder = FieldSpec.builder(PatternMatchers.class, varPatternMatchers, Modifier.PROTECTED, Modifier.FINAL);
         List<AdaptiveMeta.ByPatternMeta> byPatterns = adaptiveMeta.getByPatterns();
@@ -247,7 +255,13 @@ public class AdaptiveClassGenerator {
         return varPatternMatchers;
     }
 
-    private String addTypeMatchStatements(AdaptiveMeta adaptiveMeta) {
+    /**
+     * 注册 typeMatchers 属性
+     *
+     * @param adaptiveMeta Adaptive 信息
+     * @return 属性名
+     */
+    private String registerTypeMatchersField(AdaptiveMeta adaptiveMeta) {
         String varTypeMatchers = classScope.newVar("typeMatchers");
         FieldSpec.Builder fieldBuilder = FieldSpec.builder(TypeMatchers.class, varTypeMatchers, Modifier.PROTECTED, Modifier.FINAL);
         List<AdaptiveMeta.ByTypeMeta> byTypes = adaptiveMeta.getByTypes();

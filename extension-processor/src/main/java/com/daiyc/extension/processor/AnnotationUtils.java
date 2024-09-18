@@ -3,20 +3,19 @@ package com.daiyc.extension.processor;
 import com.daiyc.extension.core.annotations.Adaptive;
 import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.processor.meta.AdaptiveMeta;
+import com.daiyc.extension.processor.meta.ExtensionPointMeta;
 
 import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * @author daiyc
  * @since 2024/7/30
  */
+@SuppressWarnings("unchecked")
 abstract class AnnotationUtils {
 
     public static Map<String, AnnotationValue> getAnnotationValues(Element param, Class<?> annClass) {
@@ -61,6 +60,14 @@ abstract class AnnotationUtils {
                 .map(v -> (DeclaredType) v.getValue())
                 .filter(c -> !"com.daiyc.extension.core.enums.None".equals(c.toString()))
                 .orElse(null);
+    }
+
+    public static ExtensionPointMeta readExtensionPoint(Map<String, AnnotationValue> annotationValues) {
+        return new ExtensionPointMeta()
+                .setAllowNames(readStrings(annotationValues.get("allowNames")))
+                .setUnifyName((boolean) annotationValues.get("unifyName").getValue())
+                .setValue((String) annotationValues.get("value").getValue())
+                .setEnumType(getEnumType(annotationValues, "enumType"));
     }
 
     public static AdaptiveMeta readAdaptive(Element param) {
@@ -126,14 +133,21 @@ abstract class AnnotationUtils {
 
     protected static AdaptiveMeta.ByPatternMeta readByPattern(AnnotationMirror byPatternAnn) {
         Map<String, AnnotationValue> annotationValues = AnnotationUtils.getAnnotationValues(byPatternAnn);
-        List<String> patterns = ((List<AnnotationValue>) annotationValues.get("pattern").getValue())
-                .stream()
-                .map(i -> i.getValue().toString())
-                .collect(Collectors.toList());
+        List<String> patterns = readStrings(annotationValues.get("pattern"));
         String name = annotationValues.get("name").getValue().toString();
 
         return new AdaptiveMeta.ByPatternMeta()
                 .setPatterns(patterns)
                 .setName(name);
+    }
+
+    protected static List<String> readStrings(AnnotationValue annotationValue) {
+        List<AnnotationValue> value = (List<AnnotationValue>) annotationValue.getValue();
+        if (value == null) {
+            return Collections.emptyList();
+        }
+        return value.stream()
+                .map(i -> i.getValue().toString())
+                .collect(Collectors.toList());
     }
 }
