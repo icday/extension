@@ -1,11 +1,9 @@
 package com.daiyc.extension.adaptive.matcher;
 
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -14,15 +12,16 @@ import java.util.stream.Collectors;
  * @since 2024/9/17
  */
 @RequiredArgsConstructor
-public class PatternMatcher implements Predicate<String> {
+public class PatternMatcher implements Matcher<String, String> {
     private final List<Pattern> patterns;
 
-    @Getter
     private final String name;
 
     @Override
-    public boolean test(String s) {
-        return patterns.stream().anyMatch(p -> p.matcher(s).matches());
+    public String match(String s) {
+        boolean b = patterns.stream()
+                .anyMatch(p -> p.matcher(s).matches());
+        return b ? name : null;
     }
 
     public static PatternMatcher as(String name, String... patterns) {

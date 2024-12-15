@@ -20,7 +20,7 @@ import java.util.Objects;
  * @author daiyc
  * @since 2024/8/3
  */
-abstract class ElementUtils {
+public abstract class ElementUtils {
 
     /**
      * 获取对应属性的getter

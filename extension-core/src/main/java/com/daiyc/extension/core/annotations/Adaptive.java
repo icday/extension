@@ -23,11 +23,12 @@ public @interface Adaptive {
     /**
      * 当找不到匹配扩展时的降级策略
      */
+    @Deprecated
     DegradationStrategy degradationStrategy() default DegradationStrategy.NONE;
 
     /**
      * 指定的参数是 int 类型时，可以转换成一个枚举值，用于匹配对应的扩展名称。<br/>
-     * 只能指定一个
+     * <b>只能指定一个</b>
      */
     ToEnum[] toEnum() default {};
 
@@ -42,6 +43,16 @@ public @interface Adaptive {
      * 可以指定多个，按照顺序匹配
      */
     ByPattern[] byPattern() default {};
+
+    /**
+     * 是否使用默认扩展
+     */
+    boolean useDefault() default true;
+
+    /**
+     * 默认扩展名
+     */
+    String defaultExtension() default "";
 
     /**
      * 将参数转换成 extension name

@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
  * @since 2024/7/30
  */
 @SuppressWarnings("unchecked")
-abstract class AnnotationUtils {
+public abstract class AnnotationUtils {
 
     public static Map<String, AnnotationValue> getAnnotationValues(Element param, Class<?> annClass) {
         AnnotationMirror annotationMirror = param.getAnnotationMirrors()

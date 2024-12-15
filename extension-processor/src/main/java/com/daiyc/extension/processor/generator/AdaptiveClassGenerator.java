@@ -1,4 +1,4 @@
-package com.daiyc.extension.processor;
+package com.daiyc.extension.processor.generator;
 
 import com.daiyc.extension.adaptive.matcher.PatternMatcher;
 import com.daiyc.extension.adaptive.matcher.PatternMatchers;
@@ -12,6 +12,10 @@ import com.daiyc.extension.core.annotations.Adaptive;
 import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
+import com.daiyc.extension.processor.AnnotationUtils;
+import com.daiyc.extension.processor.ElementUtils;
+import com.daiyc.extension.processor.Scope;
+import com.daiyc.extension.processor.TypeUtils;
 import com.daiyc.extension.processor.exception.TypeIncompatibleException;
 import com.daiyc.extension.processor.meta.AdaptiveMeta;
 import com.daiyc.extension.processor.meta.ExtensionPointMeta;
@@ -60,6 +64,10 @@ public class AdaptiveClassGenerator {
     protected TypeSpec cache = null;
 
     protected final TypeSpec.Builder classBuilder;
+
+    protected final List<AdaptiveMethodGenerator> methodGenerators = new ArrayList<>();
+
+    protected final List<MethodGenerator> helpMethodGenerators = new ArrayList<>();
 
     protected ExtensionPointMeta extensionPointMeta;
 
@@ -387,7 +395,7 @@ public class AdaptiveClassGenerator {
         return ElementFilter.methodsIn(elementUtils.getAllMembers(interfaze))
                 .stream()
                 .filter(m -> !m.getEnclosingElement().equals(objectTypeElement))
-                .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
+//                .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
                 .collect(Collectors.toList());
     }
 

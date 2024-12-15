@@ -5,23 +5,25 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Predicate;
 
 /**
  * @author daiyc
  * @since 2024/9/17
  */
 @RequiredArgsConstructor
-public class TypeMatcher implements Predicate<Object> {
+public class TypeMatcher implements Matcher<Object, String> {
     private final List<Class<?>> types;
 
     @Getter
     private final String name;
 
     @Override
-    public boolean test(Object o) {
+    public String match(Object o) {
         return types.stream()
-                .anyMatch(type -> type.isAssignableFrom(o.getClass()));
+                .filter(type -> type.isAssignableFrom(o.getClass()))
+                .findFirst()
+                .map(t -> name)
+                .orElse(null);
     }
 
     public static TypeMatcher as(String name, Class<?>... types) {

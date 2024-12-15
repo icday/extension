@@ -1,5 +1,6 @@
 package com.daiyc.extension.processor;
 
+import com.daiyc.extension.processor.generator.AdaptiveClassGenerator;
 import com.google.auto.service.AutoService;
 import com.squareup.javapoet.JavaFile;
 import lombok.SneakyThrows;
