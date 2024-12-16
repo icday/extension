@@ -4,19 +4,20 @@ import com.daiyc.extension.adaptive.matcher.EnumMatcher.EnumFieldMatcher;
 import com.daiyc.extension.adaptive.matcher.EnumMatcher.EnumMethodMatcher;
 import com.daiyc.extension.adaptive.matcher.EnumMatcher.EnumOrdinalMatcher;
 import com.daiyc.extension.adaptive.matcher.Matcher;
+import com.daiyc.extension.util.ExtensionNamingUtils;
 import io.vavr.Tuple;
 import io.vavr.Tuple2;
-import lombok.RequiredArgsConstructor;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author daiyc
  * @since 2024/12/8
  */
 
-@RequiredArgsConstructor
 public abstract class BaseAdaptiveExtension<EXT> implements AdaptiveExtension {
     protected final ExtensionRegistry<EXT> registry;
 
@@ -43,12 +44,26 @@ public abstract class BaseAdaptiveExtension<EXT> implements AdaptiveExtension {
     protected final Map<Tuple2<Class<?>, Function<?, ?>>, EnumMethodMatcher<?, ?, ?>>
             enumMethodMatcherMap = new HashMap<>();
 
-    public BaseAdaptiveExtension(ExtensionRegistry<EXT> registry) {
-        this(registry, null, null);
-    }
+    public <E extends Enum<E>>
+    BaseAdaptiveExtension(ExtensionRegistry<EXT> registry,
+                          boolean unifyName,
+                          Class<E> enumType, String defaultExtensionName,
+                          String... candidateExtensionNames) {
+        Set<String> candidates = Stream.concat(
+                        Optional.ofNullable(enumType).map(et -> Arrays.stream(et.getEnumConstants()).map(Enum::name)).orElse(Stream.empty()),
+                        Arrays.stream(candidateExtensionNames)
+                )
+                .map(e -> {
+                    if (unifyName) {
+                        return ExtensionNamingUtils.unifyExtensionName(e);
+                    }
+                    return e;
+                })
+                .collect(Collectors.toSet());
 
-    public BaseAdaptiveExtension(ExtensionRegistry<EXT> registry, Set<String> candidateExtensionNames) {
-        this(registry, candidateExtensionNames, null);
+        this.registry = registry;
+        this.candidateExtensionNames = candidates;
+        this.defaultExtensionName = defaultExtensionName;
     }
 
     protected void addTypeMatcher(Matcher<Object, String> matcher) {

@@ -9,6 +9,7 @@ import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -17,6 +18,9 @@ import java.util.stream.Collectors;
  */
 @SuppressWarnings("unchecked")
 public abstract class AnnotationUtils {
+    public static <T> T getAnnotationValues(Element param, Class<?> annClass, Function<Map<String, AnnotationValue>, T> func) {
+        return func.apply(getAnnotationValues(param, annClass));
+    }
 
     public static Map<String, AnnotationValue> getAnnotationValues(Element param, Class<?> annClass) {
         AnnotationMirror annotationMirror = param.getAnnotationMirrors()

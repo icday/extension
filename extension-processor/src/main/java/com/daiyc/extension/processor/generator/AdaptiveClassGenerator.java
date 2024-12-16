@@ -4,10 +4,7 @@ import com.daiyc.extension.adaptive.matcher.PatternMatcher;
 import com.daiyc.extension.adaptive.matcher.PatternMatchers;
 import com.daiyc.extension.adaptive.matcher.TypeMatcher;
 import com.daiyc.extension.adaptive.matcher.TypeMatchers;
-import com.daiyc.extension.core.AdaptiveExtension;
-import com.daiyc.extension.core.ExtensionNameConverter;
-import com.daiyc.extension.core.ExtensionRegistry;
-import com.daiyc.extension.core.ObjectFactory;
+import com.daiyc.extension.core.*;
 import com.daiyc.extension.core.annotations.Adaptive;
 import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.enums.DegradationStrategy;
@@ -24,6 +21,7 @@ import com.squareup.javapoet.*;
 import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import io.vavr.collection.Stream;
+import lombok.EqualsAndHashCode;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -45,17 +43,18 @@ import java.util.stream.Collectors;
  * @author daiyc
  * @since 2024/7/31
  */
+@EqualsAndHashCode(of = "typeName")
 @SuppressWarnings("unchecked")
-public class AdaptiveClassGenerator {
-    protected final ProcessingEnvironment processingEnv;
+public class AdaptiveClassGenerator implements ClassGenerator {
+    final ProcessingEnvironment processingEnv;
 
-    protected final TypeElement interfaze;
+    final TypeElement interfaze;
 
-    protected final Elements elementUtils;
+    final Elements elementUtils;
 
-    protected final Types typeUtils;
+    final Types typeUtils;
 
-    protected final TypeElement objectTypeElement;
+    final TypeElement objectTypeElement;
 
     protected final Map<Tuple2<String, String>, MethodSpec> helpMethods = new HashMap<>();
 
@@ -63,13 +62,13 @@ public class AdaptiveClassGenerator {
 
     protected TypeSpec cache = null;
 
-    protected final TypeSpec.Builder classBuilder;
-
-    protected final List<AdaptiveMethodGenerator> methodGenerators = new ArrayList<>();
+    protected List<MethodGenerator> methodGenerators = new ArrayList<>();
 
     protected final List<MethodGenerator> helpMethodGenerators = new ArrayList<>();
 
-    protected ExtensionPointMeta extensionPointMeta;
+    protected final ExtensionPointMeta extensionPointMeta;
+
+    protected final TypeName typeName;
 
     public AdaptiveClassGenerator(ProcessingEnvironment processingEnv, TypeElement interfaze) {
         this.processingEnv = processingEnv;
@@ -79,50 +78,75 @@ public class AdaptiveClassGenerator {
 
         this.objectTypeElement = elementUtils.getTypeElement("java.lang.Object");
 
-        classBuilder = TypeSpec.classBuilder(ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
-                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                .addSuperinterface(interfaze.asType())
-                .addSuperinterface(ClassName.get(AdaptiveExtension.class));
+        this.typeName = ClassName.get(elementUtils.getPackageOf(interfaze).toString()
+                , ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()));
 
-        init();
+        this.extensionPointMeta = AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class, AnnotationUtils::readExtensionPoint);
     }
 
-    protected void init() {
-        Map<String, AnnotationValue> extensionPointAnnValues = AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class);
-        extensionPointMeta = AnnotationUtils.readExtensionPoint(extensionPointAnnValues);
+    @Override
+    public TypeName getTypeName() {
+        return typeName;
     }
 
+    @Override
+    public boolean preGenerate(GenerateContext ctx) {
+        List<ExecutableElement> allMethods = getAllInterfaceMethods();
+        this.methodGenerators = allMethods.stream()
+                .map(m -> MethodGeneratorFactory.create(this, m))
+                .collect(Collectors.toList());
+
+        methodGenerators.forEach(mg -> mg.preGenerate(ctx));
+
+        helpMethodGenerators.forEach(mg -> mg.preGenerate(ctx));
+        return true;
+    }
+
+    @Override
     public TypeSpec generate() {
         if (cache != null) {
             return cache;
         }
 
+        TypeSpec.Builder classBuilder = TypeSpec.classBuilder(ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .superclass(ParameterizedTypeName.get(ClassName.get(BaseAdaptiveExtension.class), ClassName.get(interfaze)))
+                .addSuperinterface(interfaze.asType())
+                .addSuperinterface(ClassName.get(AdaptiveExtension.class));
+
+        // region constructor
         ParameterizedTypeName registryType = ParameterizedTypeName.get(ClassName.get(ExtensionRegistry.class), ClassName.get(interfaze));
 
-        classBuilder.addField(registryType, "registry", Modifier.PROTECTED, Modifier.FINAL);
+        MethodSpec.Builder constructor = MethodSpec.constructorBuilder()
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(registryType, "registry");
 
-        FieldSpec.Builder defaultExtNameBuilder = FieldSpec.builder(String.class, "defaultExtName", Modifier.PROTECTED, Modifier.FINAL);
-        if (StringUtils.isNotBlank(extensionPointMeta.getValue())) {
-            defaultExtNameBuilder.initializer("$S", extensionPointMeta.getValue());
+        CodeBlock.Builder superStatement = CodeBlock.builder();
+        superStatement.add("super(registry");
+        if (extensionPointMeta.getEnumType() != null) {
+            superStatement.add(", $T.class", extensionPointMeta.getEnumType());
         } else {
-            defaultExtNameBuilder.initializer("null");
+            superStatement.add(", null");
         }
-        classBuilder.addField(defaultExtNameBuilder.build());
 
-        classBuilder.addMethod(
-                MethodSpec.constructorBuilder()
-                        .addModifiers(Modifier.PUBLIC)
-                        .addParameter(registryType, "registry")
-                        .addStatement("this.registry = registry")
-                        .build()
-        );
+        if (StringUtils.isNotBlank(extensionPointMeta.getValue())) {
+            superStatement.add(", $S", extensionPointMeta.getValue());
+        } else {
+            superStatement.add(", null");
+        }
 
-        Stream.ofAll(getAllInterfaceMethods())
-                .map(m -> this.generateMethodSpec(interfaze, m))
-                .forEach(classBuilder::addMethod);
+        if (CollectionUtils.isNotEmpty(extensionPointMeta.getAllowNames())) {
+            extensionPointMeta.getAllowNames()
+                    .forEach(name -> superStatement.add(", $S", name));
+        }
 
-        helpMethods.values()
-                .forEach(classBuilder::addMethod);
+        superStatement.add(")");
+        constructor.addStatement(superStatement.build());
+        // endregion
+        classBuilder.addMethod(constructor.build());
+
+        methodGenerators.forEach(mg -> classBuilder.addMethod(mg.generate()));
+        helpMethodGenerators.forEach(mg -> classBuilder.addMethod(mg.generate()));
 
         return cache = classBuilder.build();
     }
@@ -241,6 +265,7 @@ public class AdaptiveClassGenerator {
 
     /**
      * 为类新增一个 patternMatchers 属性，并填充属性值
+     *
      * @param adaptiveMeta Adaptive 信息
      * @return 属性名
      */
@@ -395,7 +420,7 @@ public class AdaptiveClassGenerator {
         return ElementFilter.methodsIn(elementUtils.getAllMembers(interfaze))
                 .stream()
                 .filter(m -> !m.getEnclosingElement().equals(objectTypeElement))
-//                .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
+                //                .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
                 .collect(Collectors.toList());
     }
 
