@@ -1,5 +1,6 @@
 package com.daiyc.extension.processor.generator;
 
+import com.daiyc.extension.adaptive.matcher.*;
 import com.daiyc.extension.core.ExtensionNameConverter;
 import com.daiyc.extension.core.ObjectFactory;
 import com.daiyc.extension.core.enums.DegradationStrategy;
@@ -10,11 +11,7 @@ import com.daiyc.extension.processor.Scope;
 import com.daiyc.extension.processor.TypeUtils;
 import com.daiyc.extension.processor.exception.TypeIncompatibleException;
 import com.daiyc.extension.processor.meta.AdaptiveMeta;
-import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.TypeName;
-import io.vavr.Tuple;
-import io.vavr.Tuple2;
+import com.squareup.javapoet.*;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -25,10 +22,14 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
+import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import static com.daiyc.extension.processor.generator.MatchType.BY_PATTERN;
+import static com.daiyc.extension.processor.generator.MatchType.BY_TYPE;
 
 /**
  * @author daiyc
@@ -43,41 +44,100 @@ public class AdaptiveMethodGenerator extends BaseMethodGenerator {
 
     final ProcessingEnvironment processingEnv;
 
+    final Elements elementUtils;
+
     final TypeElement interfaze;
 
-    public AdaptiveMethodGenerator(AdaptiveClassGenerator classGenerator, ExecutableElement method, VariableElement adaptiveParam) {
+    private final AdaptiveMeta adaptiveMeta;
+
+    private final List<? extends VariableElement> parameters;
+
+    private final Scope scope;
+
+    private final RetrieveMethodGenerator retrieveMethodGenerator;
+
+    private final int index;
+
+    public AdaptiveMethodGenerator(AdaptiveClassGenerator classGenerator, ExecutableElement method, int index, VariableElement adaptiveParam) {
         this.classGenerator = classGenerator;
         this.method = method;
+        this.index = index;
         this.adaptiveParam = adaptiveParam;
 
         this.processingEnv = classGenerator.processingEnv;
+        this.elementUtils = classGenerator.elementUtils;
         this.interfaze = classGenerator.interfaze;
+        this.adaptiveMeta = AnnotationUtils.readAdaptive(adaptiveParam);
+
+        adaptiveMeta.validate();
+
+        this.parameters = method.getParameters();
+        this.scope = Scope.fromFunction(parameters);
+        this.retrieveMethodGenerator = new RetrieveMethodGenerator(adaptiveParam.asType(), adaptiveMeta.getValue());
     }
 
     @Override
     public boolean preGenerate(GenerateContext ctx) {
-        AdaptiveMeta adaptiveMeta = AnnotationUtils.readAdaptive(adaptiveParam);
-        return false;
+        String retrieveMethodName = classGenerator.registerRetrieveMethod(retrieveMethodGenerator);
+        retrieveMethodGenerator.setMethodName(retrieveMethodName);
+
+        MatchType matchType = adaptiveMeta.getMatchType();
+        FieldSpec.Builder builder;
+        if (matchType == BY_TYPE) {
+            builder = FieldSpec.builder(
+                    ParameterizedTypeName.get(ClassName.get(Matcher.class), ClassName.get(Object.class), ClassName.get(String.class))
+                    , "matcher" + index, Modifier.PRIVATE);
+            CodeBlock.Builder code = CodeBlock.builder();
+            code.add("$T.as(", ChainMatcher.class);
+            for (AdaptiveMeta.ByTypeMeta byType : adaptiveMeta.getByTypes()) {
+                code.add("$T.as($S", TypeMatcher.class, byType.getName());
+                byType.getTypes().forEach(type -> code.add(", $T.class", type));
+                code.add(")");
+            }
+            code.add(")");
+
+            builder.initializer(code.build());
+        } else if (matchType == BY_PATTERN) {
+            builder = FieldSpec.builder(
+                    ParameterizedTypeName.get(ClassName.get(Matcher.class), ClassName.get(String.class), ClassName.get(String.class))
+                    , "matcher" + index, Modifier.PRIVATE);
+            CodeBlock.Builder code = CodeBlock.builder();
+            code.add("$T.as(", ChainMatcher.class);
+            for (AdaptiveMeta.ByPatternMeta patternMeta: adaptiveMeta.getByPatterns()) {
+                code.add("$T.as($S", PatternMatcher.class, patternMeta.getName());
+                patternMeta.getPatterns().forEach(pattern -> code.add(", $S", pattern));
+                code.add(")");
+            }
+            code.add(")");
+
+            builder.initializer(code.build());
+        } else {
+            AdaptiveMeta.ToEnumMeta toEnumMeta = adaptiveMeta.getToEnumMeta();
+            TypeElement enumElement = (TypeElement) toEnumMeta.getEnumType().asElement();
+            switch (toEnumMeta.getMatchType()) {
+                case BY_METHOD:
+                    builder = FieldSpec.builder(
+                            ParameterizedTypeName.get(ClassName.get(EnumMatcher.class), ClassName.get(String.class), ClassName.get(String.class))
+                            , "matcher" + index, Modifier.PRIVATE);
+                    break;
+                case BY_FIELD:
+                    break;
+                case BY_ORDINAL:
+                    break;
+                default:
+                    throw new IllegalStateException("Unsupported match type: " + toEnumMeta.getMatchType());
+            }
+        }
+        return true;
     }
 
     @Override
     public MethodSpec generate() {
         MethodSpec.Builder methodBuilder = newMethodBuilder(interfaze, method);
-        List<? extends VariableElement> parameters = method.getParameters();
-        Scope scope = Scope.fromFunction(parameters);
 
-        AdaptiveMeta adaptiveMeta = AnnotationUtils.readAdaptive(adaptiveParam);
-        adaptiveMeta.validate();
-
-        String path = adaptiveMeta.getValue();
         DegradationStrategy degradationStrategy = adaptiveMeta.getDegradationStrategy();
 
-        // retrieve method
-        TypeMirror paramType = adaptiveParam.asType();
-
-        Tuple2<String, String> retrieveMethodKey = Tuple.of("retrieveKey", ClassName.get(paramType).toString());
-        MethodSpec retrieveMethod = helpMethods.computeIfAbsent(retrieveMethodKey, k -> generateRetrieveMethod(k._1, paramType, path));
-        TypeName keyPropertyType = retrieveMethod.returnType;
+        TypeName keyPropertyType = ClassName.get(retrieveMethodGenerator.getReturnType());
 
         // 需要定义的局部变量
         String keyVarName = scope.newVar("key");
@@ -86,12 +146,12 @@ public class AdaptiveMethodGenerator extends BaseMethodGenerator {
         String converterVarName = scope.newVar("converter");
 
         // 读取指定路径的参数
-        methodBuilder.addStatement("$T $L = $L($L)", keyPropertyType, keyVarName, retrieveMethod.name, adaptiveParam.getSimpleName());
+        methodBuilder.addStatement("$T $L = $L($L)", keyPropertyType, keyVarName, retrieveMethodGenerator.getMethodName(), adaptiveParam.getSimpleName());
         methodBuilder.addStatement("$T $L = $T.getInstance().get($T.class)", ExtensionNameConverter.class, converterVarName, ObjectFactory.class, adaptiveMeta.getConverter());
 
         if (CollectionUtils.isNotEmpty(adaptiveMeta.getToEnums())) {
             AdaptiveMeta.ToEnumMeta toEnumMeta = adaptiveMeta.getToEnums().get(0);
-            DeclaredType enumType = ObjectUtils.defaultIfNull(toEnumMeta.getEnumType(), this.extensionPointMeta.getEnumType());
+            DeclaredType enumType = ObjectUtils.defaultIfNull(toEnumMeta.getEnumType(), classGenerator.getExtensionPointMeta().getEnumType());
 
             String byMethod = toEnumMeta.getByMethod();
             String byField = toEnumMeta.getByField();

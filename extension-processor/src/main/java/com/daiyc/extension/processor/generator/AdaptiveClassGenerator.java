@@ -22,6 +22,7 @@ import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import io.vavr.collection.Stream;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -37,6 +38,7 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -64,8 +66,9 @@ public class AdaptiveClassGenerator implements ClassGenerator {
 
     protected List<MethodGenerator> methodGenerators = new ArrayList<>();
 
-    protected final List<MethodGenerator> helpMethodGenerators = new ArrayList<>();
+    protected final Map<MethodGenerator, String> retrieveMethodGenerators = new ConcurrentHashMap<>();
 
+    @Getter
     protected final ExtensionPointMeta extensionPointMeta;
 
     protected final TypeName typeName;
@@ -84,6 +87,10 @@ public class AdaptiveClassGenerator implements ClassGenerator {
         this.extensionPointMeta = AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class, AnnotationUtils::readExtensionPoint);
     }
 
+    String registerRetrieveMethod(MethodGenerator methodGenerator) {
+        return retrieveMethodGenerators.computeIfAbsent(methodGenerator, m -> classScope.newVar("retrieve"));
+    }
+
     @Override
     public TypeName getTypeName() {
         return typeName;
@@ -98,7 +105,8 @@ public class AdaptiveClassGenerator implements ClassGenerator {
 
         methodGenerators.forEach(mg -> mg.preGenerate(ctx));
 
-        helpMethodGenerators.forEach(mg -> mg.preGenerate(ctx));
+        retrieveMethodGenerators.keySet().forEach(mg -> mg.preGenerate(ctx));
+
         return true;
     }
 
@@ -146,7 +154,8 @@ public class AdaptiveClassGenerator implements ClassGenerator {
         classBuilder.addMethod(constructor.build());
 
         methodGenerators.forEach(mg -> classBuilder.addMethod(mg.generate()));
-        helpMethodGenerators.forEach(mg -> classBuilder.addMethod(mg.generate()));
+
+        retrieveMethodGenerators.keySet().forEach(mg -> classBuilder.addMethod(mg.generate()));
 
         return cache = classBuilder.build();
     }

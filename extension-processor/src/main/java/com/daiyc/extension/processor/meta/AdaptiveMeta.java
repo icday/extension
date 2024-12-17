@@ -1,6 +1,8 @@
 package com.daiyc.extension.processor.meta;
 
 import com.daiyc.extension.core.enums.DegradationStrategy;
+import com.daiyc.extension.processor.generator.EnumMatchType;
+import com.daiyc.extension.processor.generator.MatchType;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import org.apache.commons.collections.CollectionUtils;
@@ -85,6 +87,19 @@ public class AdaptiveMeta {
                 throw new IllegalArgumentException("@ToEnum MUST ONLY specify one of byMethod, byField or byOrdinal strategy");
             }
         }
+
+        public EnumMatchType getMatchType() {
+            if (StringUtils.isNotBlank(byMethod)) {
+                return EnumMatchType.BY_METHOD;
+            }
+            if (StringUtils.isNotBlank(byField)) {
+                return EnumMatchType.BY_FIELD;
+            }
+            if (byOrdinal) {
+                return EnumMatchType.BY_ORDINAL;
+            }
+            throw new IllegalArgumentException("@ToEnum MUST specify any of byMethod, byField or byOrdinal strategy");
+        }
     }
 
     @Data
@@ -113,5 +128,25 @@ public class AdaptiveMeta {
                 throw new IllegalArgumentException("Must specify pattern for @Adaptive.byPattern");
             }
         }
+    }
+
+    public MatchType getMatchType() {
+        if (CollectionUtils.isNotEmpty(toEnums)) {
+            return MatchType.TO_ENUM;
+        }
+        if (CollectionUtils.isNotEmpty(byTypes)) {
+            return MatchType.BY_TYPE;
+        }
+        if (CollectionUtils.isNotEmpty(byPatterns)) {
+            return MatchType.BY_PATTERN;
+        }
+        throw new IllegalArgumentException("@Adaptive MUST ONLY specify one of toEnum(), byType() or byPattern");
+    }
+
+    public ToEnumMeta getToEnumMeta() {
+        if (CollectionUtils.isNotEmpty(toEnums)) {
+            return toEnums.get(0);
+        }
+        return null;
     }
 }
