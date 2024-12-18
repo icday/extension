@@ -17,7 +17,11 @@ public class ExtensionPointMeta {
 
     private DeclaredType enumType;
 
-    private List<String> allowNames;
+    private List<String> candidates;
 
-    private boolean unifyName;
+    private boolean strictMode;
+
+    private boolean useDefault;
+
+    private String defaultExtension;
 }

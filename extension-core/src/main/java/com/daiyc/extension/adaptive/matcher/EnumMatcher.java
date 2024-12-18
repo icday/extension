@@ -17,36 +17,33 @@ import java.util.stream.Collectors;
 public abstract class EnumMatcher<T, E extends Enum<E>> implements Matcher<T, String> {
     protected final Class<E> enumType;
 
-    public static <T extends Enum<T>> EnumMatcher<Integer, T> byOrdinal(Class<T> enumType) {
+    @Override
+    public String match(T t) {
+        E e = getEnum(t);
+        return e == null ? null : e.name();
+    }
+
+    protected abstract E getEnum(T t);
+
+    public static <E extends Enum<E>> EnumMatcher<Integer, E> byOrdinal(Class<E> enumType) {
         return new EnumOrdinalMatcher<>(enumType);
     }
 
-    public static <T extends Enum<T>, F> EnumMatcher<F, T> byField(Class<T> enumType, Function<T, F> getter) {
+    public static <E extends Enum<E>, T> EnumMatcher<T, E> byField(Class<E> enumType, Function<E, T> getter) {
         return new EnumFieldMatcher<>(enumType, getter);
     }
 
-    public static <T extends Enum<T>, V, F extends Function<V, T>> EnumMatcher<V, T> byMethod(Class<T> enumType, F fn) {
+    public static <E extends Enum<E>, T> EnumMatcher<T, E> byMethod(Class<E> enumType, Function<T, E> fn) {
         return new EnumMethodMatcher<>(enumType, fn);
     }
 
-    @Override
-    public String match(T t) {
-        E e = doMatch(t);
-        if (e == null) {
-            return null;
-        }
-        return e.name();
-    }
-
-    protected abstract E doMatch(T t);
-
-    public static class EnumOrdinalMatcher<T extends Enum<T>> extends EnumMatcher<Integer, T> {
-        public EnumOrdinalMatcher(Class<T> enumType) {
+    public static class EnumOrdinalMatcher<E extends Enum<E>> extends EnumMatcher<Integer, E> {
+        public EnumOrdinalMatcher(Class<E> enumType) {
             super(enumType);
         }
 
         @Override
-        public T doMatch(Integer ordinal) {
+        public E getEnum(Integer ordinal) {
             if (ordinal == null || ordinal < 0 || ordinal >= enumType.getEnumConstants().length) {
                 return null;
             }
@@ -54,10 +51,10 @@ public abstract class EnumMatcher<T, E extends Enum<E>> implements Matcher<T, St
         }
     }
 
-    public static class EnumFieldMatcher<T extends Enum<T>, F> extends EnumMatcher<F, T> {
-        private final Map<F, T> map;
+    public static class EnumFieldMatcher<E extends Enum<E>, T> extends EnumMatcher<T, E> {
+        private final Map<T, E> map;
 
-        public EnumFieldMatcher(Class<T> enumType, Function<T, F> getter) {
+        public EnumFieldMatcher(Class<E> enumType, Function<E, T> getter) {
             super(enumType);
 
             map = Arrays.stream(enumType.getEnumConstants())
@@ -65,22 +62,21 @@ public abstract class EnumMatcher<T, E extends Enum<E>> implements Matcher<T, St
         }
 
         @Override
-        public T doMatch(F f) {
-            return map.get(f);
+        protected E getEnum(T t) {
+            return map.get(t);
         }
     }
 
-    public static class EnumMethodMatcher<T extends Enum<T>, V, F extends Function<V, T>> extends EnumMatcher<V, T> {
-        private final F function;
+    public static class EnumMethodMatcher<E extends Enum<E>, V> extends EnumMatcher<V, E> {
+        private final Function<V, E> function;
 
-        public EnumMethodMatcher(Class<T> enumType, F fn) {
+        public EnumMethodMatcher(Class<E> enumType, Function<V, E> function) {
             super(enumType);
-
-            this.function = fn;
+            this.function = function;
         }
 
         @Override
-        public T doMatch(V v) {
+        protected E getEnum(V v) {
             return function.apply(v);
         }
     }

@@ -17,7 +17,7 @@ public @interface ByType {
     Class<?>[] type();
 
     /**
-     * 扩展名<br/>需要遵守 {@link ExtensionPoint} 的 enumType 或 allowNames 的限制
+     * 扩展名<br/>需要遵守 {@link ExtensionPoint} 的 enumType 或 candidates 的限制
      */
     String name();
 }

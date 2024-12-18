@@ -1,6 +1,6 @@
 package com.daiyc.extension.processor;
 
-import com.daiyc.extension.processor.generator.AdaptiveClassGenerator;
+import com.daiyc.extension.processor.generator.GenerateFacade;
 import com.google.auto.service.AutoService;
 import com.squareup.javapoet.JavaFile;
 import lombok.SneakyThrows;
@@ -24,6 +24,14 @@ import java.util.Set;
         ExtensionConstants.EXTENSION,
 })
 public class ExtensionProcessor extends AbstractProcessor {
+    private GenerateFacade generateFacade;
+
+    @Override
+    public synchronized void init(ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+        generateFacade = new GenerateFacade(processingEnv);
+    }
+
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         for (TypeElement annotation : annotations) {
@@ -90,9 +98,7 @@ public class ExtensionProcessor extends AbstractProcessor {
         Elements elementUtils = processingEnv.getElementUtils();
         String packageName = elementUtils.getPackageOf(interfaze).getQualifiedName().toString();
 
-        AdaptiveClassGenerator adaptiveClassGenerator = new AdaptiveClassGenerator(processingEnv, interfaze);
-
-        return JavaFile.builder(packageName, adaptiveClassGenerator.generate())
+        return JavaFile.builder(packageName, generateFacade.generate(interfaze))
                 .build();
     }
 

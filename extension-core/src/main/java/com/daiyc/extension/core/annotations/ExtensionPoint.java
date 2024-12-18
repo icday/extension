@@ -28,10 +28,21 @@ public @interface ExtensionPoint {
     /**
      * 如果未定义枚举，也想限制扩展实现名称只能为以下值
      */
-    String[] allowNames() default {};
+    String[] candidates() default {};
 
     /**
-     * 将驼峰、下划线形式的名称都统一化
+     * 严格模式要求扩展实现名称必须与枚举名称保持一致<br>
+     * 否则会尝试匹配
      */
-    boolean unifyName() default true;
+    boolean strictMode() default false;
+
+    /**
+     * 没有指定扩展实现名称时是否使用默认
+     */
+    boolean useDefault() default false;
+
+    /**
+     * 默认扩展名
+     */
+    String defaultExtension() default "";
 }

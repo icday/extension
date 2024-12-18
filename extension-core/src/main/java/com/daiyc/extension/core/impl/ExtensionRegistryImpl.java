@@ -5,9 +5,11 @@ import com.daiyc.extension.core.annotations.Extension;
 import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.enums.None;
 import com.daiyc.extension.core.exceptions.DuplicateExtensionNameException;
+import com.daiyc.extension.core.exceptions.ExtensionNameDenyException;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
 import com.daiyc.extension.util.ExtensionNamingUtils;
 import io.vavr.control.Try;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Method;
@@ -28,9 +30,9 @@ import java.util.stream.Stream;
 public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
     protected final Class<T> type;
 
-    protected final boolean unifyName;
+    protected final boolean strictMode;
 
-    protected final Set<String> availableNames;
+    protected final Set<String> candidates;
 
     protected Map<String, T> cache = new ConcurrentHashMap<>();
 
@@ -39,12 +41,12 @@ public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
     public ExtensionRegistryImpl(Class<T> type) {
         this.type = type;
         ExtensionPoint ann = type.getAnnotation(ExtensionPoint.class);
-        unifyName = ann.unifyName();
+        strictMode = ann.strictMode();
 
-        this.availableNames = getAvailableNames(ann);
+        this.candidates = getCandidates(ann);
     }
 
-    protected Set<String> getAvailableNames(ExtensionPoint ann) {
+    protected Set<String> getCandidates(ExtensionPoint ann) {
         Class<? extends Enum<?>> enumType = ann.enumType();
         if (enumType != null && !enumType.equals(None.class)) {
             return Try.of(() -> {
@@ -56,13 +58,13 @@ public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
             }).getOrElse(Collections.emptySet());
         }
 
-        return Stream.of(ann.allowNames())
+        return Stream.of(ann.candidates())
                 .map(this::format)
                 .collect(Collectors.toSet());
     }
 
     protected String format(String name) {
-        if (!unifyName || StringUtils.isBlank(name)) {
+        if (strictMode || StringUtils.isBlank(name)) {
             return name;
         }
         return ExtensionNamingUtils.unifyExtensionName(name);
@@ -74,6 +76,9 @@ public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
         String[] names = ann.value();
         for (String name : names) {
             name = format(name);
+            if (CollectionUtils.isNotEmpty(candidates) && !candidates.contains(name)) {
+                throw new ExtensionNameDenyException(type, "name: %s", name);
+            }
             if (factories.containsKey(name)) {
                 throw new DuplicateExtensionNameException(type, "Extension name conflict: %s! at: %s", name, type.getName());
             }

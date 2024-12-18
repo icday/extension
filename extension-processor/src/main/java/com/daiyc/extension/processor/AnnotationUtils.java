@@ -1,13 +1,11 @@
 package com.daiyc.extension.processor;
 
 import com.daiyc.extension.core.annotations.Adaptive;
-import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.processor.meta.AdaptiveMeta;
 import com.daiyc.extension.processor.meta.ExtensionPointMeta;
 
 import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.TypeMirror;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -68,23 +66,23 @@ public abstract class AnnotationUtils {
 
     public static ExtensionPointMeta readExtensionPoint(Map<String, AnnotationValue> annotationValues) {
         return new ExtensionPointMeta()
-                .setAllowNames(readStrings(annotationValues.get("allowNames")))
-                .setUnifyName((boolean) annotationValues.get("unifyName").getValue())
+                .setCandidates(readStrings(annotationValues.get("candidates")))
+                .setStrictMode((boolean) annotationValues.get("strictMode").getValue())
                 .setValue((String) annotationValues.get("value").getValue())
-                .setEnumType(getEnumType(annotationValues, "enumType"));
+                .setEnumType(getEnumType(annotationValues, "enumType"))
+                .setUseDefault((boolean) annotationValues.get("useDefault").getValue())
+                .setDefaultExtension((String) annotationValues.get("defaultExtension").getValue())
+                ;
     }
 
     public static AdaptiveMeta readAdaptive(Element param) {
         Map<String, AnnotationValue> annotationValues = getAnnotationValues(param, Adaptive.class);
-        TypeMirror converterType = (TypeMirror) annotationValues.get("converter").getValue();
         String path = annotationValues.get("value").getValue().toString();
-        String degradationStrategyName = annotationValues.get("degradationStrategy").getValue().toString();
-        DegradationStrategy degradationStrategy = DegradationStrategy.valueOf(degradationStrategyName);
 
         AdaptiveMeta adaptiveMeta = new AdaptiveMeta()
-                .setConverter(converterType)
                 .setValue(path)
-                .setDegradationStrategy(degradationStrategy);
+                .setUseDefault((boolean) annotationValues.get("useDefault").getValue())
+                .setDefaultExtension((String) annotationValues.get("defaultExtension").getValue());
 
         List<AnnotationMirror> toEnums = (List<AnnotationMirror>) annotationValues.get("toEnum").getValue();
         List<AdaptiveMeta.ToEnumMeta> toEnumMetas = toEnums.stream()

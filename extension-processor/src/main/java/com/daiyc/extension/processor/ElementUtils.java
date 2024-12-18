@@ -7,6 +7,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
@@ -66,7 +67,6 @@ public abstract class ElementUtils {
         return getDestType(type, propertyNames);
     }
 
-
     public static TypeMirror getDestType(TypeMirror type, List<String> propNames) {
         return Stream.ofAll(propNames)
                 .foldLeft(type, (type0, prop) -> {
@@ -74,5 +74,30 @@ public abstract class ElementUtils {
                     Tuple2<VariableElement, ExecutableElement> property = ElementUtils.findProperty((DeclaredType) type0, prop);
                     return property._1.asType();
                 });
+    }
+
+    public static ExecutableElement findMethod(DeclaredType type, String methodName) {
+        return findMethod(type, methodName, null);
+    }
+
+    public static ExecutableElement findMethod(DeclaredType type, String methodName, Boolean isStatic) {
+        List<? extends Element> members = type.asElement().getEnclosedElements();
+        return Stream.ofAll(ElementFilter.methodsIn(members))
+                .filter(m -> m.getModifiers().contains(Modifier.PUBLIC))
+                .filter(m -> {
+                    if (isStatic == null) {
+                        return true;
+                    }
+                    boolean containsStatic = m.getModifiers().contains(Modifier.STATIC);
+                    return containsStatic == isStatic;
+                })
+                .find(m -> m.getSimpleName().toString().equals(methodName))
+                .getOrNull();
+    }
+    public static VariableElement findField(DeclaredType type, String fieldName) {
+        List<? extends Element> members = type.asElement().getEnclosedElements();
+        return Stream.ofAll(ElementFilter.fieldsIn(members))
+                .find(m -> m.getSimpleName().toString().equals(fieldName))
+                .getOrNull();
     }
 }

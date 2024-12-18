@@ -11,10 +11,10 @@ import java.util.List;
  * @since 2024/12/15
  */
 public abstract class MethodGeneratorFactory {
-    public static MethodGenerator create(AdaptiveClassGenerator classGenerator, ExecutableElement method) {
+    public static MethodGenerator create(AdaptiveClassGenerator classGenerator, ExecutableElement method, int index) {
         VariableElement adaptiveParam = getAdaptiveParam(method);
         if (adaptiveParam != null) {
-            return new AdaptiveMethodGenerator(classGenerator, method, adaptiveParam);
+            return new AdaptiveMethodGenerator(classGenerator, method, index, adaptiveParam);
         } else {
             return new UnsupportedMethodGenerator(classGenerator, method);
         }
@@ -22,6 +22,9 @@ public abstract class MethodGeneratorFactory {
 
     protected static VariableElement getAdaptiveParam(ExecutableElement method) {
         int idx = getAdaptiveParamIndex(method);
+        if (idx < 0) {
+            return null;
+        }
         return method.getParameters().get(idx);
     }
 

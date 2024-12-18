@@ -1,6 +1,5 @@
 package com.daiyc.extension.processor.meta;
 
-import com.daiyc.extension.core.enums.DegradationStrategy;
 import com.daiyc.extension.processor.generator.EnumMatchType;
 import com.daiyc.extension.processor.generator.MatchType;
 import lombok.Data;
@@ -9,7 +8,6 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.TypeMirror;
 import java.util.List;
 
 /**
@@ -21,15 +19,15 @@ import java.util.List;
 public class AdaptiveMeta {
     private String value;
 
-    private TypeMirror converter;
-
-    private DegradationStrategy degradationStrategy;
-
     private List<ToEnumMeta> toEnums;
 
     private List<ByTypeMeta> byTypes;
 
     private List<ByPatternMeta> byPatterns;
+
+    private boolean useDefault;
+
+    private String defaultExtension;
 
     public void validate() {
         int cnt = 0;
@@ -140,7 +138,7 @@ public class AdaptiveMeta {
         if (CollectionUtils.isNotEmpty(byPatterns)) {
             return MatchType.BY_PATTERN;
         }
-        throw new IllegalArgumentException("@Adaptive MUST ONLY specify one of toEnum(), byType() or byPattern");
+        return null;
     }
 
     public ToEnumMeta getToEnumMeta() {
