@@ -1,7 +1,6 @@
 package com.daiyc.extension.core;
 
 import com.daiyc.extension.adaptive.matcher.EnumMatcher.EnumFieldMatcher;
-import com.daiyc.extension.adaptive.matcher.EnumMatcher.EnumMethodMatcher;
 import com.daiyc.extension.adaptive.matcher.EnumMatcher.EnumOrdinalMatcher;
 import com.daiyc.extension.adaptive.matcher.Matcher;
 import com.daiyc.extension.util.ExtensionNamingUtils;
@@ -40,9 +39,6 @@ public abstract class BaseAdaptiveExtension<EXT> implements AdaptiveExtension {
 
     protected final Map<Tuple2<Class<?>, Function<?, ?>>, EnumFieldMatcher<?, ?>>
             enumFieldMatcherMap = new HashMap<>();
-
-    protected final Map<Tuple2<Class<?>, Function<?, ?>>, EnumMethodMatcher<?, ?, ?>>
-            enumMethodMatcherMap = new HashMap<>();
 
     public <E extends Enum<E>>
     BaseAdaptiveExtension(ExtensionRegistry<EXT> registry,
@@ -90,9 +86,5 @@ public abstract class BaseAdaptiveExtension<EXT> implements AdaptiveExtension {
 
     protected <E extends Enum<E>, F> EnumFieldMatcher<E, F> enumFieldMatcher(Class<E> enumType, Class<F> fieldType, Function<E, F> getter) {
         return (EnumFieldMatcher<E, F>) enumFieldMatcherMap.get(Tuple.of(enumType, getter));
-    }
-
-    protected <E extends Enum<E>, V, FUNC extends Function<V, E>> EnumMethodMatcher<E, V, FUNC> enumMethodMatcher(Class<E> enumType, FUNC function) {
-        return (EnumMethodMatcher<E, V, FUNC>) enumMethodMatcherMap.get(Tuple.of(enumType, function));
     }
 }

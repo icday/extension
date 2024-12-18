@@ -57,5 +57,6 @@ public @interface Adaptive {
     /**
      * 将参数转换成 extension name
      */
+    @Deprecated
     Class<? extends ExtensionNameConverter> converter() default DefaultNameConverter.class;
 }
