@@ -53,6 +53,7 @@ public class ExtensionBeanDefinitionScanner extends ClassPathBeanDefinitionScann
             definition.getConstructorArgumentValues().addGenericArgumentValue(beanClassName);
             definition.getPropertyValues().add("extensionPointType", Thread.currentThread().getContextClassLoader().loadClass(beanClassName));
             definition.getPropertyValues().add("extensionContext", extensionContext);
+            definition.setPrimary(true);
             definition.setBeanClass(ExtensionFactoryBean.class);
             definition.setAttribute("factoryBeanObjectType", beanClassName);
         }
