@@ -6,25 +6,21 @@ import com.daiyc.extension.core.ExtensionRegistry;
 import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.processor.AnnotationUtils;
 import com.daiyc.extension.processor.Scope;
+import com.daiyc.extension.processor.generator.method.MethodGeneratorFactory;
 import com.daiyc.extension.processor.meta.ExtensionPointMeta;
 import com.daiyc.extension.util.ExtensionNamingUtils;
 import com.squareup.javapoet.*;
-import io.vavr.Tuple2;
 import io.vavr.collection.Stream;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,21 +33,13 @@ import java.util.stream.Collectors;
 @EqualsAndHashCode(of = "typeName")
 @SuppressWarnings("unchecked")
 public class AdaptiveClassGenerator implements ClassGenerator {
-    final ProcessingEnvironment processingEnv;
+    @Getter
+    private final GenerateContext context;
 
-    final TypeElement interfaze;
-
-    final Elements elementUtils;
-
-    final Types typeUtils;
-
-    final TypeElement objectTypeElement;
-
-    protected final Map<Tuple2<String, String>, MethodSpec> helpMethods = new HashMap<>();
+    @Getter
+    private final TypeElement interfaze;
 
     protected final Scope classScope = new Scope();
-
-    protected TypeSpec cache = null;
 
     protected List<MethodGenerator> methodGenerators = new ArrayList<>();
 
@@ -64,26 +52,26 @@ public class AdaptiveClassGenerator implements ClassGenerator {
 
     protected final List<FieldSpec> fields = new ArrayList<>();
 
-    public AdaptiveClassGenerator(ProcessingEnvironment processingEnv, TypeElement interfaze) {
-        this.processingEnv = processingEnv;
+    public AdaptiveClassGenerator(GenerateContext context, TypeElement interfaze) {
+        this.context = context;
         this.interfaze = interfaze;
-        this.elementUtils = processingEnv.getElementUtils();
-        this.typeUtils = processingEnv.getTypeUtils();
 
-        this.objectTypeElement = elementUtils.getTypeElement("java.lang.Object");
-
-        this.typeName = ClassName.get(elementUtils.getPackageOf(interfaze).toString()
+        this.typeName = ClassName.get(context.getElementUtils().getPackageOf(interfaze).toString()
                 , ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()));
 
         this.extensionPointMeta = AnnotationUtils.getAnnotationValues(interfaze, ExtensionPoint.class, AnnotationUtils::readExtensionPoint);
     }
 
-    String registerRetrieveMethod(MethodGenerator methodGenerator) {
+    public String registerRetrieveMethod(MethodGenerator methodGenerator) {
         return retrieveMethodGenerators.computeIfAbsent(methodGenerator, m -> classScope.newVar("retrieve"));
     }
 
-    void registerMatcher(FieldSpec matcher) {
+    public void addField(FieldSpec matcher) {
         fields.add(matcher);
+    }
+
+    public boolean hasField(String name) {
+        return fields.stream().anyMatch(f -> f.name.equals(name));
     }
 
     @Override
@@ -92,25 +80,19 @@ public class AdaptiveClassGenerator implements ClassGenerator {
     }
 
     @Override
-    public boolean preGenerate(GenerateContext ctx) {
+    public void preGenerate() {
         List<ExecutableElement> allMethods = getAllInterfaceMethods();
         this.methodGenerators = Stream.ofAll(allMethods)
                 .zipWithIndex((m, i) -> MethodGeneratorFactory.create(this, m, i))
                 .toJavaList();
 
-        methodGenerators.forEach(mg -> mg.preGenerate(ctx));
+        methodGenerators.forEach(MethodGenerator::preGenerate);
 
-        retrieveMethodGenerators.keySet().forEach(mg -> mg.preGenerate(ctx));
-
-        return true;
+        retrieveMethodGenerators.keySet().forEach(MethodGenerator::preGenerate);
     }
 
     @Override
     public TypeSpec generate() {
-        if (cache != null) {
-            return cache;
-        }
-
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(ExtensionNamingUtils.generateAdaptiveSimpleClassName(interfaze.getSimpleName().toString()))
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .superclass(ParameterizedTypeName.get(ClassName.get(BaseAdaptiveExtension.class), ClassName.get(interfaze)))
@@ -144,9 +126,6 @@ public class AdaptiveClassGenerator implements ClassGenerator {
             superStatement.add(", null");
         }
 
-        if (StringUtils.isNotBlank(extensionPointMeta.getDefaultExtension())) {
-        }
-
         if (CollectionUtils.isNotEmpty(extensionPointMeta.getCandidates())) {
             extensionPointMeta.getCandidates()
                     .forEach(name -> superStatement.add(", $S", name));
@@ -161,16 +140,16 @@ public class AdaptiveClassGenerator implements ClassGenerator {
                 .appendAll(retrieveMethodGenerators.keySet())
                 .forEach(mg -> classBuilder.addMethod(mg.generate()));
 
-        return cache = classBuilder.build();
+        return classBuilder.build();
     }
 
     /**
      * 获取所有需要实现的方法
      */
     protected List<ExecutableElement> getAllInterfaceMethods() {
-        return ElementFilter.methodsIn(elementUtils.getAllMembers(interfaze))
+        return ElementFilter.methodsIn(context.getElementUtils().getAllMembers(interfaze))
                 .stream()
-                .filter(m -> !m.getEnclosingElement().equals(objectTypeElement))
+                .filter(m -> !m.getEnclosingElement().equals(context.getObjectTypeElement()))
                 .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
                 .collect(Collectors.toList());
     }

@@ -7,7 +7,7 @@ import com.squareup.javapoet.MethodSpec;
  * @since 2024/12/15
  */
 public interface MethodGenerator {
-    boolean preGenerate(GenerateContext ctx);
+    void preGenerate();
 
     MethodSpec generate();
 }

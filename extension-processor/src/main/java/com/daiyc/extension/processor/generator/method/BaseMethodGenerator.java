@@ -1,9 +1,12 @@
-package com.daiyc.extension.processor.generator;
+package com.daiyc.extension.processor.generator.method;
 
+import com.daiyc.extension.processor.Scope;
+import com.daiyc.extension.processor.generator.AdaptiveClassGenerator;
+import com.daiyc.extension.processor.generator.GenerateContext;
+import com.daiyc.extension.processor.generator.MethodGenerator;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.MethodSpec;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
@@ -16,8 +19,33 @@ import java.util.List;
  * @since 2024/12/15
  */
 public abstract class BaseMethodGenerator implements MethodGenerator {
+    protected final AdaptiveClassGenerator classGenerator;
 
-    protected ProcessingEnvironment processingEnv;
+    protected final TypeElement interfaze;
+
+    protected final GenerateContext context;
+
+    protected final ExecutableElement method;
+
+    protected final List<? extends VariableElement> parameters;
+
+    protected final int index;
+
+    protected final Scope scope;
+
+    public BaseMethodGenerator(AdaptiveClassGenerator classGenerator, ExecutableElement method, int index) {
+        this.classGenerator = classGenerator;
+        this.interfaze = classGenerator.getInterfaze();
+        this.context = classGenerator.getContext();
+        this.method = method;
+        this.parameters = method.getParameters();
+        this.scope = Scope.fromFunction(this.parameters);
+        this.index = index;
+    }
+
+    @Override
+    public void preGenerate() {
+    }
 
     protected MethodSpec.Builder newMethodBuilder(TypeElement interfaze, ExecutableElement method) {
         MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(method.getSimpleName().toString())
@@ -29,7 +57,7 @@ public abstract class BaseMethodGenerator implements MethodGenerator {
         for (VariableElement parameter : parameters) {
             TypeMirror parameterType = parameter.asType();
             if (parameterType instanceof TypeVariable) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, parameter + " is TypeVariable");
+                context.getMessager().printMessage(Diagnostic.Kind.NOTE, parameter + " is TypeVariable");
                 TypeMirror resolvedType = findRealType(interfaze, method, (TypeVariable) parameterType);
                 methodBuilder.addParameter(ClassName.get(resolvedType), parameter.getSimpleName().toString());
             } else {
@@ -52,7 +80,7 @@ public abstract class BaseMethodGenerator implements MethodGenerator {
         Element enclosingElement = method.getEnclosingElement();
         // 方法定义的接口
         if (declaredType.asElement().equals(enclosingElement)) {
-            return processingEnv.getTypeUtils().asMemberOf(declaredType, typeVariable.asElement());
+            return context.getTypeUtils().asMemberOf(declaredType, typeVariable.asElement());
         }
 
         List<? extends TypeMirror> parentInterfaces = ((TypeElement) ((DeclaredType) superInterface).asElement()).getInterfaces();

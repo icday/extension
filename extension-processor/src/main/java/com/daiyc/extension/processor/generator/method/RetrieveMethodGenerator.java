@@ -1,6 +1,7 @@
-package com.daiyc.extension.processor.generator;
+package com.daiyc.extension.processor.generator.method;
 
 import com.daiyc.extension.processor.ElementUtils;
+import com.daiyc.extension.processor.generator.MethodGenerator;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
@@ -9,7 +10,6 @@ import io.vavr.Tuple2;
 import io.vavr.collection.Stream;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
 
@@ -26,9 +26,8 @@ import java.util.List;
  * @author daiyc
  * @since 2024/12/17
  */
-@RequiredArgsConstructor
 @EqualsAndHashCode(of = {"type", "path"})
-public class RetrieveMethodGenerator extends BaseMethodGenerator {
+public class RetrieveMethodGenerator implements MethodGenerator {
     private final TypeMirror type;
 
     private final String path;
@@ -51,13 +50,11 @@ public class RetrieveMethodGenerator extends BaseMethodGenerator {
     }
 
     @Override
-    public boolean preGenerate(GenerateContext ctx) {
-        return true;
+    public void preGenerate() {
     }
 
     @Override
     public MethodSpec generate() {
-        List<String> propertyNames = Arrays.asList(StringUtils.split(path, "."));
         TypeMirror returnType = ElementUtils.getDestType(type, propertyNames);
 
         String baseArg = "arg";

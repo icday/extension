@@ -71,12 +71,11 @@ public abstract class AnnotationUtils {
                 .setValue((String) annotationValues.get("value").getValue())
                 .setEnumType(getEnumType(annotationValues, "enumType"))
                 .setUseDefault((boolean) annotationValues.get("useDefault").getValue())
-                .setDefaultExtension((String) annotationValues.get("defaultExtension").getValue())
                 ;
     }
 
-    public static AdaptiveMeta readAdaptive(Element param) {
-        Map<String, AnnotationValue> annotationValues = getAnnotationValues(param, Adaptive.class);
+    public static AdaptiveMeta readAdaptive(Element element) {
+        Map<String, AnnotationValue> annotationValues = getAnnotationValues(element, Adaptive.class);
         String path = annotationValues.get("value").getValue().toString();
 
         AdaptiveMeta adaptiveMeta = new AdaptiveMeta()

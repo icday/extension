@@ -1,6 +1,8 @@
-package com.daiyc.extension.processor.generator;
+package com.daiyc.extension.processor.generator.method;
 
 import com.daiyc.extension.core.annotations.Adaptive;
+import com.daiyc.extension.processor.generator.AdaptiveClassGenerator;
+import com.daiyc.extension.processor.generator.MethodGenerator;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
@@ -13,10 +15,13 @@ import java.util.List;
 public abstract class MethodGeneratorFactory {
     public static MethodGenerator create(AdaptiveClassGenerator classGenerator, ExecutableElement method, int index) {
         VariableElement adaptiveParam = getAdaptiveParam(method);
+
         if (adaptiveParam != null) {
             return new AdaptiveMethodGenerator(classGenerator, method, index, adaptiveParam);
+        } else if (method.getAnnotation(Adaptive.class) != null) {
+            return new SPELMethodGenerator(classGenerator, method, index);
         } else {
-            return new UnsupportedMethodGenerator(classGenerator, method);
+            return new UnsupportedMethodGenerator(classGenerator, method, index);
         }
     }
 

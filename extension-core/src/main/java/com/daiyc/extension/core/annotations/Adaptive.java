@@ -8,7 +8,7 @@ import java.lang.annotation.*;
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.PARAMETER})
+@Target({ElementType.PARAMETER, ElementType.METHOD})
 public @interface Adaptive {
     /**
      * 用于指定用于决策实现的参数名<br/>

@@ -10,7 +10,7 @@ import com.squareup.javapoet.TypeSpec;
 public interface ClassGenerator {
     TypeName getTypeName();
 
-    boolean preGenerate(GenerateContext ctx);
+    void preGenerate();
 
     TypeSpec generate();
 }

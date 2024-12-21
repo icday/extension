@@ -40,9 +40,4 @@ public @interface ExtensionPoint {
      * 没有指定扩展实现名称时是否使用默认
      */
     boolean useDefault() default false;
-
-    /**
-     * 默认扩展名
-     */
-    String defaultExtension() default "";
 }

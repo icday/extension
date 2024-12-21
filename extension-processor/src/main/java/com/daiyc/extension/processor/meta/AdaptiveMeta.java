@@ -29,7 +29,7 @@ public class AdaptiveMeta {
 
     private String defaultExtension;
 
-    public void validate() {
+    public void validateParamAnnotation() {
         int cnt = 0;
         if (CollectionUtils.isNotEmpty(toEnums)) {
             cnt++;

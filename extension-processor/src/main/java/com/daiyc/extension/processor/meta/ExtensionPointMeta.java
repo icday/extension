@@ -22,6 +22,4 @@ public class ExtensionPointMeta {
     private boolean strictMode;
 
     private boolean useDefault;
-
-    private String defaultExtension;
 }

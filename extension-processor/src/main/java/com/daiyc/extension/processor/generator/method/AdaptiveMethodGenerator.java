@@ -1,25 +1,22 @@
-package com.daiyc.extension.processor.generator;
+package com.daiyc.extension.processor.generator.method;
 
 import com.daiyc.extension.adaptive.matcher.*;
 import com.daiyc.extension.core.exceptions.MismatchExtensionException;
 import com.daiyc.extension.processor.AnnotationUtils;
 import com.daiyc.extension.processor.ElementUtils;
-import com.daiyc.extension.processor.Scope;
+import com.daiyc.extension.processor.generator.AdaptiveClassGenerator;
+import com.daiyc.extension.processor.generator.MatchType;
 import com.daiyc.extension.processor.meta.AdaptiveMeta;
 import com.squareup.javapoet.*;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
-import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.daiyc.extension.processor.generator.MatchType.*;
@@ -29,51 +26,29 @@ import static com.daiyc.extension.processor.generator.MatchType.*;
  * @since 2024/12/11
  */
 public class AdaptiveMethodGenerator extends BaseMethodGenerator {
-    protected final AdaptiveClassGenerator classGenerator;
-
-    protected final ExecutableElement method;
-
     protected final VariableElement adaptiveParam;
-
-    final ProcessingEnvironment processingEnv;
-
-    final Elements elementUtils;
-
-    final TypeElement interfaze;
 
     private final AdaptiveMeta adaptiveMeta;
 
-    private final List<? extends VariableElement> parameters;
-
-    private final Scope scope;
-
     private final RetrieveMethodGenerator retrieveMethodGenerator;
-
-    private final int index;
 
     private FieldSpec matcherField;
 
     public AdaptiveMethodGenerator(AdaptiveClassGenerator classGenerator, ExecutableElement method, int index
             , VariableElement adaptiveParam) {
-        this.classGenerator = classGenerator;
-        this.method = method;
-        this.index = index;
+        super(classGenerator, method, index);
+
         this.adaptiveParam = adaptiveParam;
 
-        this.processingEnv = classGenerator.processingEnv;
-        this.elementUtils = classGenerator.elementUtils;
-        this.interfaze = classGenerator.interfaze;
         this.adaptiveMeta = AnnotationUtils.readAdaptive(adaptiveParam);
 
-        adaptiveMeta.validate();
+        adaptiveMeta.validateParamAnnotation();
 
-        this.parameters = method.getParameters();
-        this.scope = Scope.fromFunction(parameters);
         this.retrieveMethodGenerator = new RetrieveMethodGenerator(adaptiveParam.asType(), adaptiveMeta.getValue());
     }
 
     @Override
-    public boolean preGenerate(GenerateContext ctx) {
+    public void preGenerate() {
         String retrieveMethodName = classGenerator.registerRetrieveMethod(retrieveMethodGenerator);
         retrieveMethodGenerator.setMethodName(retrieveMethodName);
 
@@ -105,7 +80,7 @@ public class AdaptiveMethodGenerator extends BaseMethodGenerator {
             builder.initializer(code.build());
         } else if (matchType == TO_ENUM) {
             AdaptiveMeta.ToEnumMeta toEnumMeta = adaptiveMeta.getToEnumMeta();
-            DeclaredType enumType = ObjectUtils.defaultIfNull(toEnumMeta.getEnumType(), classGenerator.extensionPointMeta.getEnumType());
+            DeclaredType enumType = ObjectUtils.defaultIfNull(toEnumMeta.getEnumType(), classGenerator.getExtensionPointMeta().getEnumType());
             assert enumType != null;
 
             switch (toEnumMeta.getMatchType()) {
@@ -133,8 +108,7 @@ public class AdaptiveMethodGenerator extends BaseMethodGenerator {
             builder.initializer("new $T()", ToStringMatcher.class);
         }
         matcherField = builder.build();
-        classGenerator.registerMatcher(matcherField);
-        return true;
+        classGenerator.addField(matcherField);
     }
 
     protected FieldSpec.Builder newMatcherFieldBuilder(Class<?> type, TypeName fromType) {
