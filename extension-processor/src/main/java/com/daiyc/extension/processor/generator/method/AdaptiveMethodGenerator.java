@@ -58,10 +58,17 @@ public class AdaptiveMethodGenerator extends BaseMethodGenerator {
             builder = newMatcherFieldBuilder(Matcher.class, Object.class);
             CodeBlock.Builder code = CodeBlock.builder();
             code.add("$T.as(", ChainMatcher.class);
+            boolean isFirstMatcher = true;
             for (AdaptiveMeta.ByTypeMeta byType : adaptiveMeta.getByTypes()) {
+                if (!isFirstMatcher) {
+                    code.add(",");
+                }
+
                 code.add("$T.as($S", TypeMatcher.class, byType.getName());
                 byType.getTypes().forEach(type -> code.add(", $T.class", type));
                 code.add(")");
+
+                isFirstMatcher = false;
             }
             code.add(")");
 
@@ -70,10 +77,17 @@ public class AdaptiveMethodGenerator extends BaseMethodGenerator {
             builder = newMatcherFieldBuilder(Matcher.class, String.class);
             CodeBlock.Builder code = CodeBlock.builder();
             code.add("$T.as(", ChainMatcher.class);
+            boolean isFirstMatcher = true;
             for (AdaptiveMeta.ByPatternMeta patternMeta: adaptiveMeta.getByPatterns()) {
+                if (!isFirstMatcher) {
+                    code.add(",");
+                }
+
                 code.add("$T.as($S", PatternMatcher.class, patternMeta.getName());
                 patternMeta.getPatterns().forEach(pattern -> code.add(", $S", pattern));
                 code.add(")");
+
+                isFirstMatcher = false;
             }
             code.add(")");
 
