@@ -4,10 +4,7 @@ import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.core.impl.ExtensionLoaderImpl;
 import com.daiyc.extension.core.impl.ExtensionRegistryImpl;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -47,14 +44,14 @@ public class ExtensionContext implements ExtensionLoaderFactory, ExtensionPointR
 
     @Override
     public <I> void register(Class<I> clazz, Supplier<I> supplier) {
-        List<Class<?>> points = parseExtensionPoints(clazz);
+        Set<Class<?>> points = parseExtensionPoints(clazz);
         for (Class point : points) {
             doRegister(point, clazz, supplier);
         }
     }
 
-    private <C> List<Class<?>> parseExtensionPoints(Class<C> clazz) {
-        List<Class<?>> points = new ArrayList<>();
+    private <C> Set<Class<?>> parseExtensionPoints(Class<C> clazz) {
+        Set<Class<?>> points = new HashSet<>();
 
         Class<?> p = clazz;
         while (!p.equals(Object.class)) {
