@@ -11,6 +11,7 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
+import java.util.Arrays;
 import java.util.Set;
 
 /**
@@ -57,8 +58,12 @@ public class ExtensionProcessor extends AbstractProcessor {
             }
 
             processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "found @ExtensionPoint at " + element);
-            if (!processPoint(element)) {
-                return false;
+            try {
+                if (!processPoint(element)) {
+                    return false;
+                }
+            } catch (Exception ex) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to process @ExtensionPoint at " + element + ": " + ex + ", " + Arrays.toString(ex.getStackTrace()));
             }
         }
         return true;
@@ -70,8 +75,12 @@ public class ExtensionProcessor extends AbstractProcessor {
                 continue;
             }
 
-            if (!checkExtension(element, roundEnv)) {
-                return false;
+            try {
+                if (!checkExtension(element, roundEnv)) {
+                    return false;
+                }
+            } catch (Exception ex) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to process @Extension at " + element + ": " + ex + ", " + Arrays.toString(ex.getStackTrace()));
             }
         }
         return true;

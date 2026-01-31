@@ -15,7 +15,11 @@ import java.util.stream.Stream;
  */
 
 public abstract class BaseAdaptiveExtension<EXT> implements AdaptiveExtension {
-    protected final ExtensionRegistry<EXT> registry;
+    protected final ExtensionContext extensionContext;
+
+    protected final Class<EXT> extPointType;
+
+    protected final ExtensionLoader<EXT> extensionLoader;
 
     /**
      * 候选扩展名称，为空表示不限制
@@ -32,27 +36,31 @@ public abstract class BaseAdaptiveExtension<EXT> implements AdaptiveExtension {
     protected final String defaultExtension;
 
     public <E extends Enum<E>>
-    BaseAdaptiveExtension(ExtensionRegistry<EXT> registry,
+    BaseAdaptiveExtension(ExtensionContext extensionContext,
+                          Class<EXT> extPointType,
                           boolean strictMode,
                           Class<E> enumType, boolean useDefault, String defaultExtension,
                           String... candidateExtensionNames) {
-        Set<String> candidates = Stream.concat(
+
+        this.extensionContext = extensionContext;
+        this.extPointType = extPointType;
+        this.extensionLoader = extensionContext.getExtensionLoader(extPointType);
+        this.candidateExtensionNames = Stream.concat(
                         Optional.ofNullable(enumType).map(et -> Arrays.stream(et.getEnumConstants()).map(Enum::name)).orElse(Stream.empty()),
                         Arrays.stream(candidateExtensionNames)
-                )
-                .map(e -> {
+                ).map(e -> {
                     if (strictMode) {
                         return ExtensionNamingUtils.unifyExtensionName(e);
                     }
                     return e;
-                })
-                .collect(Collectors.toSet());
-
-        this.registry = registry;
-        this.candidateExtensionNames = candidates;
+                }).collect(Collectors.toSet());
         this.strictMode = strictMode;
         this.useDefault = useDefault;
         this.defaultExtension = defaultExtension;
+    }
+
+    protected EXT getExtension(String name) {
+        return extensionLoader.getExtension(name);
     }
 
     protected String getExtensionName(String name, boolean useDefault) {

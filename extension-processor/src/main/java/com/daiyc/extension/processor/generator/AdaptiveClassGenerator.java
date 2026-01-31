@@ -2,6 +2,7 @@ package com.daiyc.extension.processor.generator;
 
 import com.daiyc.extension.core.AdaptiveExtension;
 import com.daiyc.extension.core.BaseAdaptiveExtension;
+import com.daiyc.extension.core.ExtensionContext;
 import com.daiyc.extension.core.ExtensionRegistry;
 import com.daiyc.extension.core.annotations.ExtensionPoint;
 import com.daiyc.extension.processor.AnnotationUtils;
@@ -99,6 +100,11 @@ public class AdaptiveClassGenerator implements ClassGenerator {
                 .addSuperinterface(interfaze.asType())
                 .addSuperinterface(ClassName.get(AdaptiveExtension.class));
 
+        ClassName component = ClassName.bestGuess("org.springframework.stereotype.Component");
+        ClassName primary = ClassName.bestGuess("org.springframework.context.annotation.Primary");
+        classBuilder.addAnnotation(component);
+        classBuilder.addAnnotation(primary);
+
         for (FieldSpec field : fields) {
             classBuilder.addField(field);
         }
@@ -108,10 +114,13 @@ public class AdaptiveClassGenerator implements ClassGenerator {
 
         MethodSpec.Builder constructor = MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
-                .addParameter(registryType, "registry");
+                .addParameter(ExtensionContext.class, "extensionContext");
+//                .addParameter(registryType, "registry");
 
         CodeBlock.Builder superStatement = CodeBlock.builder();
-        superStatement.add("super(registry, $L", extensionPointMeta.isStrictMode());
+        superStatement.add("super(extensionContext");
+        superStatement.add(", $T.class", interfaze);
+        superStatement.add(", $L", extensionPointMeta.isStrictMode());
         if (extensionPointMeta.getEnumType() != null) {
             superStatement.add(", $T.class", extensionPointMeta.getEnumType());
         } else {

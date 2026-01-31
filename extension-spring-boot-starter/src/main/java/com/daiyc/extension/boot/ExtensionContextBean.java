@@ -6,7 +6,6 @@ import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
@@ -14,7 +13,6 @@ import java.util.Map;
  * @author daiyc
  * @since 2024/8/6
  */
-@Component
 public class ExtensionContextBean extends ExtensionContext implements ApplicationContextAware, SmartInitializingSingleton {
     private ApplicationContext applicationContext;
 

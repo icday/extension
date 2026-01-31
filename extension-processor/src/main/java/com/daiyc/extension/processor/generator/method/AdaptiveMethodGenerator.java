@@ -160,7 +160,7 @@ public class AdaptiveMethodGenerator extends BaseMethodGenerator {
         methodBuilder.addStatement("throw new $T($T.class)", MismatchExtensionException.class, interfaze);
         methodBuilder.endControlFlow();
 
-        methodBuilder.addStatement("$L $L = this.registry.get($L)", interfaze.getSimpleName(), extensionVarName, keyStrVarName);
+        methodBuilder.addStatement("$L $L = this.getExtension($L)", interfaze.getSimpleName(), extensionVarName, keyStrVarName);
 
         methodBuilder.beginControlFlow("if ($L == null)", extensionVarName);
         methodBuilder.addStatement("throw new $T($T.class, $L)", MismatchExtensionException.class, interfaze, keyStrVarName);

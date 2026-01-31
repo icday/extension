@@ -26,7 +26,6 @@ import java.util.stream.Stream;
  * @author daiyc
  * @since 2024/7/27
  */
-@SuppressWarnings("unchecked")
 public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
     protected final Class<T> type;
 
@@ -51,7 +50,7 @@ public class ExtensionRegistryImpl<T> implements ExtensionRegistry<T> {
         if (enumType != null && !enumType.equals(None.class)) {
             return Try.of(() -> {
                 Method m = enumType.getMethod("values");
-                return Stream.of((Enum[]) m.invoke(enumType))
+                return Stream.of((Enum<?>[]) m.invoke(enumType))
                         .map(Enum::name)
                         .map(this::format)
                         .collect(Collectors.toSet());
