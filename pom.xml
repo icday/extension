@@ -58,6 +58,17 @@
         <connection>scm:git:https://github.com/icday/extension.git</connection>
     </scm>
 
+    <developers>
+        <developer>
+            <id>daiyc</id>
+            <name>daiyc</name>
+            <email>ycdai33@gmail.com</email>
+            <roles>
+                <role>Developer</role>
+            </roles>
+        </developer>
+    </developers>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -267,26 +278,38 @@
                 <artifactId>maven-deploy-plugin</artifactId>
                 <version>${maven.deploy.version}</version>
             </plugin>
+<!--            <plugin>-->
+<!--                <groupId>org.sonatype.plugins</groupId>-->
+<!--                <artifactId>nexus-staging-maven-plugin</artifactId>-->
+<!--                <version>${nexus.staging.version}</version>-->
+<!--                <extensions>true</extensions>-->
+<!--                <configuration>-->
+<!--                    <serverId>ossrh</serverId>-->
+<!--                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>-->
+<!--                    <autoReleaseAfterClose>true</autoReleaseAfterClose>-->
+<!--                </configuration>-->
+<!--            </plugin>-->
+<!--            <plugin>-->
+<!--                <groupId>org.apache.maven.plugins</groupId>-->
+<!--                <artifactId>maven-release-plugin</artifactId>-->
+<!--                <version>${maven.release.version}</version>-->
+<!--                <configuration>-->
+<!--                    <autoVersionSubmodules>true</autoVersionSubmodules>-->
+<!--                    <useReleaseProfile>false</useReleaseProfile>-->
+<!--                    <releaseProfiles>release</releaseProfiles>-->
+<!--                    <goals>deploy nexus-staging:release</goals>-->
+<!--                </configuration>-->
+<!--            </plugin>-->
             <plugin>
-                <groupId>org.sonatype.plugins</groupId>
-                <artifactId>nexus-staging-maven-plugin</artifactId>
-                <version>${nexus.staging.version}</version>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.7.0</version> <!-- 建议检查是否有更新 -->
                 <extensions>true</extensions>
                 <configuration>
-                    <serverId>ossrh</serverId>
-                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-release-plugin</artifactId>
-                <version>${maven.release.version}</version>
-                <configuration>
-                    <autoVersionSubmodules>true</autoVersionSubmodules>
-                    <useReleaseProfile>false</useReleaseProfile>
-                    <releaseProfiles>release</releaseProfiles>
-                    <goals>deploy nexus-staging:release</goals>
+                    <!-- 与 settings.xml 中的 server id 一致 -->
+                    <publishingServerId>ossrh</publishingServerId>
+                    <!-- true:自动发布；false:手动在网页点发布 -->
+                    <autoPublish>true</autoPublish>
                 </configuration>
             </plugin>
 
