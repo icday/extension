@@ -22,6 +22,35 @@ import java.util.Objects;
  * @since 2024/8/3
  */
 public abstract class ElementUtils {
+    /**
+     * 获取目标类型
+     *
+     * @param srcType 源类型
+     * @param propertyPath 属性路径（或者通过getter方法）
+     * @return 目标类型
+     */
+    public static TypeMirror getNestedType(DeclaredType srcType, List<String> propertyPath) {
+        return Stream.ofAll(propertyPath)
+                .foldLeft((TypeMirror) srcType, (type0, prop) -> {
+                    assert type0.getKind() == TypeKind.DECLARED;
+                    DeclaredType declaredType = (DeclaredType) type0;
+                    
+                    // 先尝试查找直接字段
+                    VariableElement field = findField(declaredType, prop);
+                    if (field != null) {
+                        return field.asType();
+                    }
+                    
+                    // 如果没有找到字段，则尝试查找getter方法
+                    ExecutableElement getter = findGetterMethod(declaredType, prop);
+                    if (getter != null) {
+                        return getter.getReturnType();
+                    }
+                    
+                    // 如果都没有找到，则抛出异常
+                    throw new IllegalArgumentException("Cannot find property or getter '" + prop + "' in type '" + type0 + "'");
+                });
+    }
 
     /**
      * 获取对应属性的getter
@@ -30,19 +59,19 @@ public abstract class ElementUtils {
      * @param propertyName 字段名
      * @return (字段类型, getter方法)
      */
-    public static Tuple2<VariableElement, ExecutableElement> findProperty(DeclaredType type, String propertyName) {
+    public static Tuple2<TypeMirror, ExecutableElement> findProperty(DeclaredType type, String propertyName) {
+        ExecutableElement getter = findGetterMethod(type, propertyName);
+        return Tuple.of(getter.getReturnType(), getter);
+    }
+
+    private static ExecutableElement findGetterMethod(DeclaredType type, String propertyName) {
         List<? extends Element> members = type.asElement().getEnclosedElements();
+        return findGetterMethod(members, propertyName);
+    }
 
-        VariableElement field = Stream.ofAll(ElementFilter.fieldsIn(members))
-                .find(f -> f.getSimpleName().toString().equals(propertyName))
-                .getOrNull();
-
-        if (field == null) {
-            return null;
-        }
-
+    private static ExecutableElement findGetterMethod(List<? extends Element> members, String propertyName) {
         List<String> prefixes = Arrays.asList("is", "get");
-        ExecutableElement getter = Stream.ofAll(ElementFilter.methodsIn(members))
+        return Stream.ofAll(ElementFilter.methodsIn(members))
                 .map(method -> {
                     String name = method.getSimpleName().toString();
                     for (String prefix : prefixes) {
@@ -58,26 +87,13 @@ public abstract class ElementUtils {
                 .filter(t -> t._1.equals(propertyName))
                 .map(t -> t._2)
                 .getOrNull();
-
-        return Tuple.of(field, getter);
-    }
-
-    public static TypeMirror getDestType(TypeMirror type, String path) {
-        List<String> propertyNames = Arrays.asList(StringUtils.split(path, "."));
-        return getDestType(type, propertyNames);
     }
 
     public static TypeMirror getDestType(TypeMirror type, List<String> propNames) {
-        return Stream.ofAll(propNames)
-                .foldLeft(type, (type0, prop) -> {
-                    assert type0.getKind() == TypeKind.DECLARED;
-                    Tuple2<VariableElement, ExecutableElement> property = ElementUtils.findProperty((DeclaredType) type0, prop);
-                    return property._1.asType();
-                });
-    }
-
-    public static ExecutableElement findMethod(DeclaredType type, String methodName) {
-        return findMethod(type, methodName, null);
+        if (propNames.isEmpty()) {
+            return type;
+        }
+        return ElementUtils.getNestedType((DeclaredType) type, propNames);
     }
 
     public static ExecutableElement findMethod(DeclaredType type, String methodName, Boolean isStatic) {

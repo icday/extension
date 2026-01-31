@@ -15,7 +15,6 @@ import org.apache.commons.lang3.StringUtils;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -66,7 +65,7 @@ public class RetrieveMethodGenerator implements MethodGenerator {
         Stream.ofAll(propertyNames)
                 .foldLeft(Tuple.of(0, baseArg, type), (cur, propName) -> cur.apply((i, varName, varType) -> {
                     assert varType.getKind() == TypeKind.DECLARED;
-                    Tuple2<VariableElement, ExecutableElement> property = ElementUtils.findProperty((DeclaredType) varType, propName);
+                    Tuple2<TypeMirror, ExecutableElement> property = ElementUtils.findProperty((DeclaredType) varType, propName);
                     builder.beginControlFlow("if ($L == null)", varName);
                     if (returnType.getKind().isPrimitive()) {
                         builder.addStatement("throw new $T()", NullPointerException.class);
@@ -77,8 +76,8 @@ public class RetrieveMethodGenerator implements MethodGenerator {
 
                     return property.apply((var, getter) -> {
                         String nextArgName = baseArg + i;
-                        builder.addStatement("$T $L = $L.$L()", var.asType(), nextArgName, varName, getter.getSimpleName().toString());
-                        return Tuple.of(i + 1, nextArgName, var.asType());
+                        builder.addStatement("$T $L = $L.$L()", var, nextArgName, varName, getter.getSimpleName().toString());
+                        return Tuple.of(i + 1, nextArgName, var);
                     });
                 })).apply((i, curArg, type) -> {
                     builder.addStatement("return " + curArg);
